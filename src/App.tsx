@@ -13,8 +13,8 @@ export function App() {
   return (
     <div>
       <div className="page">
-        <section className="hero">
-          <div className="card">
+        <section className="heroStack">
+          <div className="card heroCard">
             <div className="copy">
               <div className="kicker">
                 <span className="kickerDot" aria-hidden="true" />
@@ -37,7 +37,7 @@ export function App() {
             </div>
           </div>
 
-          <div className="card globeWrap" aria-label="Interactive 3D globe">
+          <div className="card globeWrap globeWrapHero" aria-label="Interactive 3D globe">
             <Suspense
               fallback={
                 <div className="globeFallback">
