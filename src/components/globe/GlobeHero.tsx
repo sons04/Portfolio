@@ -6,6 +6,7 @@ import { Bloom, EffectComposer, SMAA, SSAO } from "@react-three/postprocessing";
 import { timelineNodes, type TimelineNode } from "./timeline";
 import { clamp, latLonToVector3, vector3ToLatLon } from "./geo";
 import { theme } from "../../styles/theme";
+import { Earth } from "./Earth";
 
 type QualityTier = "low" | "mid" | "high";
 
@@ -125,21 +126,6 @@ function Atmosphere({ radius = 1.03 }: { radius?: number }) {
     <mesh scale={radius}>
       <sphereGeometry args={[1, 128, 128]} />
       <shaderMaterial ref={matRef} attach="material" {...shader} />
-    </mesh>
-  );
-}
-
-function EarthBase() {
-  return (
-    <mesh>
-      <sphereGeometry args={[1, 192, 192]} />
-      <meshStandardMaterial
-        color={new THREE.Color(theme.colors.bg).offsetHSL(0, 0, 0.06)}
-        metalness={0.08}
-        roughness={0.95}
-        emissive={new THREE.Color(theme.colors.bg)}
-        emissiveIntensity={0.35}
-      />
     </mesh>
   );
 }
@@ -379,7 +365,7 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={["#05060a"]} />
+      <color attach="background" args={[theme.colors.bg]} />
 
       <ambientLight intensity={0.35} />
       <directionalLight position={[3, 2, 4]} intensity={1.6} />
@@ -392,15 +378,16 @@ function Scene({
           onSurfacePick(e.point.clone());
         }}
       >
-        {/* Globe + atmosphere + timeline-driven nodes (design-system mode) */}
-        <EarthBase />
-        <TimelineMarkers
-          nodes={timelineNodes}
-          activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
-          onSelect={onSelectNode}
-        />
-        <NetworkArcs nodes={timelineNodes} />
-        <Atmosphere />
+        <RotatingGlobe paused={paused}>
+          <Earth />
+          <TimelineMarkers
+            nodes={timelineNodes}
+            activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
+            onSelect={onSelectNode}
+          />
+          <NetworkArcs nodes={timelineNodes} />
+          <Atmosphere />
+        </RotatingGlobe>
       </group>
 
       <OrbitControls
@@ -441,6 +428,22 @@ function Scene({
       )}
     </>
   );
+}
+
+function RotatingGlobe({
+  paused,
+  children
+}: {
+  paused: boolean;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((_s, dt) => {
+    if (!ref.current) return;
+    if (paused) return;
+    ref.current.rotation.y += dt * 0.06;
+  });
+  return <group ref={ref}>{children}</group>;
 }
 
 export default function GlobeHero() {
