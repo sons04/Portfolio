@@ -1,10 +1,11 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls, ScrollControls, Scroll, useScroll } from "@react-three/drei";
+import { Environment, OrbitControls } from "@react-three/drei";
 import { Bloom, EffectComposer, SMAA, SSAO } from "@react-three/postprocessing";
 import { timelineNodes, type TimelineNode } from "./timeline";
 import { clamp, latLonToVector3, vector3ToLatLon } from "./geo";
+import { theme } from "../../styles/theme";
 
 type QualityTier = "low" | "mid" | "high";
 
@@ -62,8 +63,9 @@ function Atmosphere({ radius = 1.03 }: { radius?: number }) {
   const shader = useMemo(() => {
     return {
       uniforms: {
-        uColor: { value: new THREE.Color("#6fe7ff") },
-        uIntensity: { value: 1.35 },
+        uColorA: { value: new THREE.Color(theme.colors.primary) },
+        uColorB: { value: new THREE.Color(theme.colors.accent) },
+        uIntensity: { value: 1.1 },
         uTime: { value: 0 }
       },
       vertexShader: `
@@ -77,7 +79,8 @@ function Atmosphere({ radius = 1.03 }: { radius?: number }) {
         }
       `,
       fragmentShader: `
-        uniform vec3 uColor;
+        uniform vec3 uColorA;
+        uniform vec3 uColorB;
         uniform float uIntensity;
         uniform float uTime;
         varying vec3 vNormal;
@@ -93,17 +96,23 @@ function Atmosphere({ radius = 1.03 }: { radius?: number }) {
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
           float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 5.0);
 
-          // Subtle animated noise so bloom catches "alive" highlights.
-          float n = hash(vNormal.xy * 70.0 + uTime * 0.07);
-          float shimmer = smoothstep(0.55, 1.0, n) * 0.15;
+          // Time-based subtle noise + mild color shift (cheap tier, no scattering).
+          float n0 = hash(vNormal.xy * 70.0 + uTime * 0.05);
+          float n1 = hash(vNormal.yz * 70.0 - uTime * 0.04);
+          float shimmer = (n0 * 0.6 + n1 * 0.4);
+          shimmer = smoothstep(0.55, 1.0, shimmer) * 0.10;
 
-          float alpha = clamp(fresnel * uIntensity + shimmer, 0.0, 1.0);
-          gl_FragColor = vec4(uColor, alpha);
+          float band = sin((uTime * 0.5) + vNormal.y * 9.0) * 0.5 + 0.5;
+          vec3 col = mix(uColorA, uColorB, clamp(band, 0.0, 1.0));
+
+          float alpha = clamp(fresnel * uIntensity + shimmer, 0.0, 0.85);
+          gl_FragColor = vec4(col, alpha);
         }
       `,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      toneMapped: false
     } satisfies Partial<THREE.ShaderMaterialParameters>;
   }, []);
 
@@ -125,263 +134,103 @@ function EarthBase() {
     <mesh>
       <sphereGeometry args={[1, 192, 192]} />
       <meshStandardMaterial
-        color="#0b1530"
+        color={new THREE.Color(theme.colors.bg).offsetHSL(0, 0, 0.06)}
         metalness={0.08}
         roughness={0.95}
-        emissive="#050a14"
-        emissiveIntensity={0.6}
+        emissive={new THREE.Color(theme.colors.bg)}
+        emissiveIntensity={0.35}
       />
     </mesh>
   );
 }
 
-function EarthHoloGrid({ radius = 1.005 }: { radius?: number }) {
-  const matRef = useRef<THREE.ShaderMaterial>(null);
-
-  const shader = useMemo(() => {
-    return {
-      uniforms: {
-        uTime: { value: 0 },
-        uColorA: { value: new THREE.Color("#6fe7ff") },
-        uColorB: { value: new THREE.Color("#7aa7ff") },
-        uOpacity: { value: 0.5 }
-      },
-      vertexShader: `
-        varying vec3 vPos;
-        varying vec3 vNormal;
-        void main() {
-          vPos = position;
-          vNormal = normalize(normalMatrix * normal);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform vec3 uColorA;
-        uniform vec3 uColorB;
-        uniform float uOpacity;
-        varying vec3 vPos;
-        varying vec3 vNormal;
-
-        float line(float v, float width) {
-          float a = abs(fract(v) - 0.5);
-          return 1.0 - smoothstep(width, width + 0.01, a);
-        }
-
-        void main() {
-          // Spherical-ish UV from normal; good enough for stylised grid.
-          vec3 n = normalize(vPos);
-          float u = atan(n.z, n.x) / 6.2831853 + 0.5;
-          float v = asin(n.y) / 3.1415926 + 0.5;
-
-          float lat = line(v * 36.0, 0.03);
-          float lon = line(u * 72.0, 0.03);
-          float grid = max(lat, lon);
-
-          // Animated scanning band.
-          float scan = smoothstep(0.0, 0.2, sin((v * 12.0 - uTime * 0.6) * 6.2831853) * 0.5 + 0.5);
-          float glow = grid * (0.45 + 0.55 * scan);
-
-          // Rim boost for "hologram shell"
-          float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vec3(0.0,0.0,1.0))), 0.0), 3.0);
-
-          vec3 col = mix(uColorB, uColorA, glow);
-          float alpha = clamp((glow * 0.75 + fresnel * 0.22) * uOpacity, 0.0, 1.0);
-          gl_FragColor = vec4(col, alpha);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    } satisfies Partial<THREE.ShaderMaterialParameters>;
-  }, []);
-
-  useFrame((_s, dt) => {
-    if (!matRef.current) return;
-    matRef.current.uniforms.uTime.value += dt;
-  });
-
-  return (
-    <mesh scale={radius}>
-      <sphereGeometry args={[1, 192, 192]} />
-      <shaderMaterial ref={matRef} attach="material" {...shader} />
-    </mesh>
-  );
-}
-
-function surfacePoints(count: number, radius = 1.001) {
-  const positions = new Float32Array(count * 3);
-  const seeds = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
-    // Uniform distribution on sphere.
-    const u = Math.random();
-    const v = Math.random();
-    const theta = 2 * Math.PI * u;
-    const phi = Math.acos(2 * v - 1);
-    const x = Math.sin(phi) * Math.cos(theta);
-    const y = Math.cos(phi);
-    const z = Math.sin(phi) * Math.sin(theta);
-    positions[i * 3 + 0] = x * radius;
-    positions[i * 3 + 1] = y * radius;
-    positions[i * 3 + 2] = z * radius;
-    seeds[i] = Math.random();
-  }
-  return { positions, seeds };
-}
-
-function GlowPoints({
-  count,
-  color = "#6fe7ff",
-  baseSize = 2.0,
-  opacity = 0.8
+function TimelineMarkers({
+  nodes,
+  activeId,
+  onSelect
 }: {
-  count: number;
-  color?: string;
-  baseSize?: number;
-  opacity?: number;
+  nodes: TimelineNode[];
+  activeId: string;
+  onSelect: (id: string) => void;
 }) {
-  const geomRef = useRef<THREE.BufferGeometry>(null);
-  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const instancedRef = useRef<THREE.InstancedMesh>(null);
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  const { positions, seeds } = useMemo(() => surfacePoints(count), [count]);
+  const items = useMemo(() => {
+    return nodes.map((n) => ({
+      id: n.id,
+      pos: latLonToVector3(n.coordinates.lat, n.coordinates.lon, 1.012)
+    }));
+  }, [nodes]);
 
-  const shader = useMemo(() => {
-    return {
-      uniforms: {
-        uTime: { value: 0 },
-        uColor: { value: new THREE.Color(color) },
-        uOpacity: { value: opacity },
-        uBaseSize: { value: baseSize }
-      },
-      vertexShader: `
-        uniform float uTime;
-        uniform float uBaseSize;
-        attribute float aSeed;
-        varying float vAlpha;
-
-        void main() {
-          vec3 p = position;
-          vec4 mvPos = modelViewMatrix * vec4(p, 1.0);
-
-          // Twinkle without chaos.
-          float tw = 0.55 + 0.45 * sin(uTime * 1.3 + aSeed * 10.0);
-          vAlpha = tw;
-          gl_PointSize = uBaseSize * tw * (300.0 / -mvPos.z);
-
-          gl_Position = projectionMatrix * mvPos;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uColor;
-        uniform float uOpacity;
-        varying float vAlpha;
-
-        void main() {
-          // Soft circular point sprite.
-          vec2 c = gl_PointCoord - vec2(0.5);
-          float d = dot(c, c);
-          float a = smoothstep(0.25, 0.0, d);
-          gl_FragColor = vec4(uColor, a * vAlpha * uOpacity);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    } satisfies Partial<THREE.ShaderMaterialParameters>;
-  }, [baseSize, color, opacity]);
-
+  // Build/update instance matrices (discs oriented to the surface normal).
   useEffect(() => {
-    if (!geomRef.current) return;
-    geomRef.current.setAttribute(
-      "position",
-      new THREE.BufferAttribute(positions, 3)
-    );
-    geomRef.current.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
-    geomRef.current.computeBoundingSphere();
-  }, [positions, seeds]);
+    if (!instancedRef.current) return;
+    const mesh = instancedRef.current;
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    const pos = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    const m = new THREE.Matrix4();
 
-  useFrame((_s, dt) => {
+    for (let i = 0; i < items.length; i++) {
+      pos.copy(items[i].pos);
+      normal.copy(pos).normalize();
+      quat.setFromUnitVectors(zAxis, normal);
+      scale.setScalar(1);
+      m.compose(pos, quat, scale);
+      mesh.setMatrixAt(i, m);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [items]);
+
+  useFrame((state) => {
     if (!matRef.current) return;
-    matRef.current.uniforms.uTime.value += dt;
+    // Subtle pulse to feel holographic; shared across instances.
+    const t = state.clock.getElapsedTime();
+    matRef.current.emissiveIntensity = 1.5 + Math.sin(t * 2.0) * 0.18;
   });
 
   return (
-    <points frustumCulled>
-      <bufferGeometry ref={geomRef} />
-      <shaderMaterial ref={matRef} attach="material" {...shader} />
-    </points>
+    <group>
+      <instancedMesh
+        ref={instancedRef}
+        args={[undefined as never, undefined as never, items.length]}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          if (e.instanceId == null) return;
+          onSelect(items[e.instanceId]?.id);
+        }}
+      >
+        {/* Disc anchors */}
+        <circleGeometry args={[0.03, 28]} />
+        <meshStandardMaterial
+          ref={matRef}
+          color={theme.colors.node}
+          emissive={theme.colors.node}
+          emissiveIntensity={1.5}
+          roughness={0.35}
+          metalness={0.05}
+          transparent
+          opacity={0.92}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </instancedMesh>
+    </group>
   );
 }
 
-function buildArcs(arcCount: number, segments = 48) {
-  const vertsPerArc = segments;
-  const positions = new Float32Array(arcCount * vertsPerArc * 2 * 3);
-  const tAttr = new Float32Array(arcCount * vertsPerArc * 2);
-
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-
-  let vIndex = 0;
-  let tIndex = 0;
-
-  for (let arc = 0; arc < arcCount; arc++) {
-    // Random endpoints, biased toward mid-latitudes for a "network" look.
-    const lat1 = (Math.random() * 120 - 60) * (Math.PI / 180);
-    const lon1 = (Math.random() * 360 - 180) * (Math.PI / 180);
-    const lat2 = (Math.random() * 120 - 60) * (Math.PI / 180);
-    const lon2 = (Math.random() * 360 - 180) * (Math.PI / 180);
-
-    a.set(
-      Math.cos(lat1) * Math.cos(lon1),
-      Math.sin(lat1),
-      Math.cos(lat1) * Math.sin(lon1)
-    ).normalize();
-    b.set(
-      Math.cos(lat2) * Math.cos(lon2),
-      Math.sin(lat2),
-      Math.cos(lat2) * Math.sin(lon2)
-    ).normalize();
-
-    let prev = new THREE.Vector3().copy(a);
-    for (let s = 1; s <= segments; s++) {
-      const t = s / segments;
-      const cur = new THREE.Vector3().copy(a).lerp(b, t).normalize();
-      const lift = 1.0 + Math.sin(Math.PI * t) * 0.28;
-      cur.multiplyScalar(lift);
-
-      // segment (prev -> cur)
-      positions[vIndex++] = prev.x;
-      positions[vIndex++] = prev.y;
-      positions[vIndex++] = prev.z;
-      tAttr[tIndex++] = t;
-
-      positions[vIndex++] = cur.x;
-      positions[vIndex++] = cur.y;
-      positions[vIndex++] = cur.z;
-      tAttr[tIndex++] = t;
-
-      prev.copy(cur);
-    }
-  }
-
-  return { positions, tAttr };
-}
-
-function ArcLines({ arcCount = 18 }: { arcCount?: number }) {
-  const geomRef = useRef<THREE.BufferGeometry>(null);
-  const matRef = useRef<THREE.ShaderMaterial>(null);
-
-  const { positions, tAttr } = useMemo(() => buildArcs(arcCount), [arcCount]);
-
-  const shader = useMemo(() => {
-    return {
+function NetworkArcs({ nodes }: { nodes: TimelineNode[] }) {
+  const material = useMemo(() => {
+    return new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uColor: { value: new THREE.Color("#6fe7ff") },
-        uOpacity: { value: 0.65 }
+        uColor: { value: new THREE.Color(theme.colors.accent) },
+        uOpacity: { value: 0.30 }
       },
       vertexShader: `
-        uniform float uTime;
         attribute float aT;
         varying float vT;
         void main() {
@@ -396,84 +245,68 @@ function ArcLines({ arcCount = 18 }: { arcCount?: number }) {
         varying float vT;
 
         void main() {
-          // Moving pulse along arc, kept subtle.
-          float p = sin((vT * 6.2831853) - uTime * 1.2) * 0.5 + 0.5;
-          float pulse = pow(p, 6.0);
-          float alpha = (0.18 + pulse * 0.82) * uOpacity;
+          // Moving dash pattern along the line.
+          float repeats = 18.0;
+          float duty = 0.38;
+          float x = fract(vT * repeats + uTime * 0.55);
+          float dash = step(x, duty);
+          float alpha = dash * uOpacity;
           gl_FragColor = vec4(uColor, alpha);
         }
       `,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending
-    } satisfies Partial<THREE.ShaderMaterialParameters>;
+      blending: THREE.AdditiveBlending,
+      toneMapped: false
+    });
   }, []);
 
-  useEffect(() => {
-    if (!geomRef.current) return;
-    geomRef.current.setAttribute(
-      "position",
-      new THREE.BufferAttribute(positions, 3)
-    );
-    geomRef.current.setAttribute("aT", new THREE.BufferAttribute(tAttr, 1));
-    geomRef.current.computeBoundingSphere();
-  }, [positions, tAttr]);
+  const lines = useMemo(() => {
+    const objs: THREE.Line[] = [];
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const a = latLonToVector3(
+        nodes[i].coordinates.lat,
+        nodes[i].coordinates.lon,
+        1.012
+      );
+      const b = latLonToVector3(
+        nodes[i + 1].coordinates.lat,
+        nodes[i + 1].coordinates.lon,
+        1.012
+      );
+      const mid = a.clone().add(b).normalize().multiplyScalar(1.35);
+      const curve = new THREE.CatmullRomCurve3([a, mid, b]);
+      const pts = curve.getPoints(80);
+
+      const positions = new Float32Array(pts.length * 3);
+      const tAttr = new Float32Array(pts.length);
+      for (let p = 0; p < pts.length; p++) {
+        positions[p * 3 + 0] = pts[p].x;
+        positions[p * 3 + 1] = pts[p].y;
+        positions[p * 3 + 2] = pts[p].z;
+        tAttr[p] = p / (pts.length - 1);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("aT", new THREE.BufferAttribute(tAttr, 1));
+      geo.computeBoundingSphere();
+
+      const line = new THREE.Line(geo, material);
+      objs.push(line);
+    }
+    return objs;
+  }, [material, nodes]);
 
   useFrame((_s, dt) => {
-    if (!matRef.current) return;
-    matRef.current.uniforms.uTime.value += dt;
+    (material.uniforms.uTime.value as number) += dt;
   });
 
   return (
-    <lineSegments>
-      <bufferGeometry ref={geomRef} />
-      <shaderMaterial ref={matRef} attach="material" {...shader} />
-    </lineSegments>
-  );
-}
-
-function TimelineMarkers({
-  nodes,
-  activeId,
-  onSelect
-}: {
-  nodes: TimelineNode[];
-  activeId: string;
-  onSelect: (id: string) => void;
-}) {
-  const group = useMemo(() => {
-    return nodes.map((n) => ({
-      id: n.id,
-      pos: latLonToVector3(n.coordinates.lat, n.coordinates.lon, 1.01)
-    }));
-  }, [nodes]);
-
-  return (
     <group>
-      {group.map((m) => {
-        const isActive = m.id === activeId;
-        return (
-          <mesh
-            key={m.id}
-            position={m.pos}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(m.id);
-            }}
-          >
-            <sphereGeometry args={[isActive ? 0.022 : 0.016, 16, 16]} />
-            <meshStandardMaterial
-              color={isActive ? "#ffffff" : "#6fe7ff"}
-              emissive={isActive ? "#6fe7ff" : "#2aa9c8"}
-              emissiveIntensity={isActive ? 2.2 : 1.2}
-              roughness={0.4}
-              metalness={0.1}
-              transparent
-              opacity={isActive ? 1 : 0.9}
-            />
-          </mesh>
-        );
-      })}
+      {lines.map((l, i) => (
+        <primitive object={l} key={i} />
+      ))}
     </group>
   );
 }
@@ -549,8 +382,9 @@ function Scene({
       <color attach="background" args={["#05060a"]} />
 
       <ambientLight intensity={0.35} />
-      <directionalLight position={[3, 2, 4]} intensity={1.25} />
-      <pointLight position={[-3, -1.5, -4]} intensity={0.35} />
+      <directionalLight position={[3, 2, 4]} intensity={1.6} />
+      <pointLight position={[-3, -1.5, -4]} intensity={0.15} />
+      <Environment preset="studio" environmentIntensity={0.6} />
 
       <group
         onClick={(e) => {
@@ -558,15 +392,14 @@ function Scene({
           onSurfacePick(e.point.clone());
         }}
       >
+        {/* Globe + atmosphere + timeline-driven nodes (design-system mode) */}
         <EarthBase />
-        <EarthHoloGrid />
-        <GlowPoints count={quality === "low" ? 500 : 1400} opacity={0.55} />
-        <ArcLines arcCount={quality === "low" ? 10 : 18} />
         <TimelineMarkers
           nodes={timelineNodes}
           activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
           onSelect={onSelectNode}
         />
+        <NetworkArcs nodes={timelineNodes} />
         <Atmosphere />
       </group>
 
@@ -598,9 +431,9 @@ function Scene({
             <></>
           )}
           <Bloom
-            intensity={0.65}
-            luminanceThreshold={0.35}
-            luminanceSmoothing={0.22}
+            intensity={0.5}
+            luminanceThreshold={theme.bloomThreshold}
+            luminanceSmoothing={0.15}
             mipmapBlur
           />
           <SMAA />
@@ -617,14 +450,20 @@ export default function GlobeHero() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [quality, setQuality] = useState<QualityTier>("high");
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollElRef = useRef<HTMLElement | null>(null);
   const [tooltip, setTooltip] = useState<{
     label: string;
     position: THREE.Vector3;
   } | null>(null);
+  const [cardVisible, setCardVisible] = useState(false);
 
   useEffect(() => {
     setSupported(isWebGLAvailable());
+  }, []);
+
+  useEffect(() => {
+    // EXPLICIT INGESTION LOG (verification)
+    // eslint-disable-next-line no-console
+    console.log("TIMELINE LOADED", timelineNodes.length, timelineNodes);
   }, []);
 
   useEffect(() => {
@@ -635,6 +474,13 @@ export default function GlobeHero() {
       setAutoRotate(false);
     }
   }, [reducedMotion]);
+
+  useEffect(() => {
+    // Cinematic rhythm: focus first, then fade card.
+    setActiveIndex(0);
+    const t = window.setTimeout(() => setCardVisible(true), 420);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useDocumentVisibility(
     () => setPaused(true),
@@ -663,137 +509,101 @@ export default function GlobeHero() {
     );
   }
 
-  const pages = timelineNodes.length;
-
   return (
     <>
-      <Canvas
-        className="globeCanvas"
-        camera={{ position: [0, 0, 3.2], fov: 45, near: 0.1, far: 50 }}
-        dpr={dpr}
-        gl={{
-          antialias: false,
-          powerPreference: "high-performance"
-        }}
-      >
-        <ScrollControls pages={pages} damping={0.22} distance={1}>
-          <ScrollElBridge onReady={(el) => (scrollElRef.current = el)} />
-          <TimelineScrollDriver
-            paused={paused}
-            reducedMotion={reducedMotion}
-            onStage={(i) => setActiveIndex(i)}
-          />
-
-          <Scroll>
-            <Suspense fallback={null}>
-              <Scene
-                quality={quality}
-                paused={paused}
-                autoRotate={autoRotate}
-                activeIndex={activeIndex}
-                onSelectNode={(id) => {
-                  const idx = timelineNodes.findIndex((n) => n.id === id);
-                  if (idx >= 0) {
-                    setActiveIndex(idx);
-                    const el = scrollElRef.current;
-                    if (el && pages > 1) {
-                      const maxScroll = el.scrollHeight - el.clientHeight;
-                      el.scrollTop = (idx / (pages - 1)) * maxScroll;
-                    }
-                  }
-                  setTooltip(null);
-                }}
-                onSurfacePick={(p) => {
-                  const { lat, lon } = vector3ToLatLon(p);
-                  setTooltip({
-                    label: `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`,
-                    position: p.clone().normalize().multiplyScalar(1.07)
-                  });
-                }}
-              />
-            </Suspense>
-          </Scroll>
-
-          <Scroll html>
-            <TimelineOverlay activeIndex={activeIndex} />
-          </Scroll>
-        </ScrollControls>
-      </Canvas>
-
-      <div className="globeHud" aria-label="Globe controls">
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setAutoRotate((v) => !v)}
+      <div className="globeStage" aria-label="Interactive 3D globe">
+        <Canvas
+          className="globeCanvas"
+          camera={{ position: [0, 2.1, 6.2], fov: 45, near: 0.1, far: 50 }}
+          dpr={dpr}
+          gl={{
+            antialias: false,
+            powerPreference: "high-performance"
+          }}
         >
-          {autoRotate ? "Pause rotation" : "Resume rotation"}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setPaused((v) => !v)}
-        >
-          {paused ? "Play effects" : "Pause effects"}
-        </button>
-        <span className="hint">Drag to rotate • Scroll to zoom</span>
+          <Suspense fallback={null}>
+            <Scene
+              quality={quality}
+              paused={paused}
+              autoRotate={autoRotate && !reducedMotion}
+              activeIndex={activeIndex}
+              onSelectNode={(id) => {
+                const idx = timelineNodes.findIndex((n) => n.id === id);
+                if (idx >= 0) setActiveIndex(idx);
+                setCardVisible(true);
+                setTooltip(null);
+              }}
+              onSurfacePick={(p) => {
+                const { lat, lon } = vector3ToLatLon(p);
+                setTooltip({
+                  label: `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`,
+                  position: p.clone().normalize().multiplyScalar(1.07)
+                });
+              }}
+            />
+          </Suspense>
+        </Canvas>
+
+        {/* Dim the globe behind the narrative card */}
+        <div
+          className={cardVisible ? "globeDim globeDimOn" : "globeDim"}
+          aria-hidden="true"
+        />
+
+        <ExperienceCard
+          visible={cardVisible}
+          node={timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)]}
+          onClose={() => setCardVisible(false)}
+          onPrev={() =>
+            setActiveIndex((v) => clamp(v - 1, 0, timelineNodes.length - 1))
+          }
+          onNext={() =>
+            setActiveIndex((v) => clamp(v + 1, 0, timelineNodes.length - 1))
+          }
+        />
+
+        <div className="globeToggleRow" aria-label="Globe toggles">
+          <button
+            type="button"
+            className="globeToggle"
+            onClick={() => setAutoRotate((v) => !v)}
+          >
+            {autoRotate ? "Orbit on" : "Orbit off"}
+          </button>
+          <button
+            type="button"
+            className="globeToggle"
+            onClick={() => setPaused((v) => !v)}
+          >
+            {paused ? "Play" : "Pause"}
+          </button>
+        </div>
       </div>
     </>
   );
 }
 
-function ScrollElBridge({ onReady }: { onReady: (el: HTMLElement) => void }) {
-  const scroll = useScroll();
-  const done = useRef(false);
-
-  useEffect(() => {
-    if (done.current) return;
-    if (!scroll?.el) return;
-    done.current = true;
-    onReady(scroll.el);
-  }, [onReady, scroll]);
-
-  return null;
-}
-
-function TimelineScrollDriver({
-  paused,
-  reducedMotion,
-  onStage
+function ExperienceCard({
+  visible,
+  node,
+  onClose,
+  onPrev,
+  onNext
 }: {
-  paused: boolean;
-  reducedMotion: boolean;
-  onStage: (idx: number) => void;
+  visible: boolean;
+  node: TimelineNode;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
 }) {
-  const scroll = useScroll();
-  const last = useRef(-1);
-
-  useFrame(() => {
-    if (paused) return;
-    if (reducedMotion) return;
-
-    const n = timelineNodes.length;
-    const idx = clamp(Math.round(scroll.offset * (n - 1)), 0, n - 1);
-    if (idx !== last.current) {
-      last.current = idx;
-      onStage(idx);
-    }
-  });
-
-  return null;
-}
-
-function TimelineOverlay({ activeIndex }: { activeIndex: number }) {
-  const node = timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)];
   return (
-    <div className="timelineOverlay">
-      <div className="glassCard" role="region" aria-label="Experience details">
+    <div className={visible ? "glassWrap glassWrapOn" : "glassWrap"} role="region">
+      <div className="glassCard" aria-label="Experience card">
         <div className="glassTop">
           <div className="glassKicker">{node.locationLabel}</div>
           <div className="glassTitleRow">
             <h3 className="glassTitle">{node.heading}</h3>
-            {node.timeframe ? (
-              <span className="glassMeta">{node.timeframe}</span>
-            ) : null}
+            {node.timeframe ? <span className="glassMeta">{node.timeframe}</span> : null}
           </div>
         </div>
 
@@ -820,35 +630,20 @@ function TimelineOverlay({ activeIndex }: { activeIndex: number }) {
           })}
         </div>
 
-        {node.citations?.length ? (
-          <div className="glassCitations" aria-label="Citations">
-            <div className="glassSectionTitle">Citations</div>
-            <ul className="glassCiteList">
-              {node.citations.map((c) => (
-                <li key={c.url}>
-                  <a href={c.url} target="_blank" rel="noreferrer">
-                    {c.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
         <div className="glassFooter">
-          <div className="progressPips" aria-label="Timeline progress">
-            {timelineNodes.map((n, i) => (
-              <span
-                key={n.id}
-                className={i === activeIndex ? "pip pipActive" : "pip"}
-                aria-hidden="true"
-              />
-            ))}
+          <div className="glassNav">
+            <button type="button" className="glassBtn" onClick={onPrev} aria-label="Previous">
+              ‹
+            </button>
+            <button type="button" className="glassBtn" onClick={onNext} aria-label="Next">
+              ›
+            </button>
           </div>
-          <div className="glassHint">Scroll to travel • Click nodes to focus</div>
+          <button type="button" className="glassBtn" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
