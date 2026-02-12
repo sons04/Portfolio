@@ -1,0 +1,221 @@
+export type TimelineNode = {
+  id: string;
+  stageTitle: string;
+  heading: string;
+  locationLabel: string;
+  coordinates: { lat: number; lon: number };
+  timeframe?: string;
+  sections: Array<
+    | { type: "bullets"; title: string; items: string[] }
+    | { type: "text"; title: string; text: string }
+  >;
+  citations?: Array<{ label: string; url: string }>;
+};
+
+// Note: lat/lon values are approximate and can be refined later.
+export const timelineNodes: TimelineNode[] = [
+  {
+    id: "ecobertura-cto",
+    stageTitle: "Scroll stage 1",
+    heading: "CTO — Ecobertura",
+    locationLabel: "Gran Canaria, Canary Islands",
+    coordinates: { lat: 28.1, lon: -15.4 },
+    timeframe: "Mar 2023 – present",
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Reduced production costs by 70% through sustainable technology and IoT integration.",
+          "Built AWS-based IoT infrastructure supporting sensors and agricultural robotics."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Notable technologies",
+        items: ["Angular", "AWS (IoT Core, DynamoDB, Lambda)", "Blender", "MicroPython"]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "Leadership that synthesises sustainability and engineering to modernise agricultural operations with measurable cost and efficiency outcomes."
+      }
+    ]
+  },
+  {
+    id: "w3-fansports-cto",
+    stageTitle: "Scroll stage 2",
+    heading: "CTO — W3 FanSports",
+    locationLabel: "Tenerife, Spain",
+    coordinates: { lat: 28.2916, lon: -16.6291 },
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Developed smart-contract–driven systems and NFT-based membership mechanisms for fan engagement.",
+          "Managed a distributed team across multiple time zones."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Notable technologies",
+        items: ["Solidity", "Ethereum", "IPFS", "React", "AWS"]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "End-to-end delivery of decentralised infrastructure and product leadership across time zones, balancing security, UX, and smart contract reliability."
+      }
+    ]
+  },
+  {
+    id: "cyberproof-soc",
+    stageTitle: "Scroll stage 3",
+    heading: "Cyber Security Analyst — CyberProof",
+    locationLabel: "Barcelona, Spain",
+    coordinates: { lat: 41.3851, lon: 2.1734 },
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Performed threat hunting, digital forensics, and vulnerability management for enterprise clients.",
+          "Supported Security Operations Centre workflows and incident response playbooks."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Technologies",
+        items: ["SIEM systems", "EDR platforms", "Python scripting"]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "Analytical, evidence-driven security work focused on detection, triage, and remediation in high-stakes environments."
+      }
+    ]
+  },
+  {
+    id: "eu-plant-disease",
+    stageTitle: "Scroll stage 4",
+    heading: "European Union Project — Plant Disease Recognition",
+    locationLabel: "Europe (multinational collaboration)",
+    coordinates: { lat: 50.0, lon: 10.0 },
+    citations: [
+      {
+        label: "Entertainment Konnections listing (address)",
+        url: "https://www.whereis.com/wa/broome-6725/yellowId-15057391"
+      }
+    ],
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Collaborated with a multinational consortium to reduce pesticide usage through earlier detection.",
+          "Delivered computer-vision models that improved crop health while minimising chemical usage."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Technologies",
+        items: ["PyTorch", "Computer vision", "IoT sensors", "GIS tools"]
+      }
+    ]
+  },
+  {
+    id: "entertainment-konnections",
+    stageTitle: "Scroll stage 5",
+    heading: "Micro‑soldering Technician — Entertainment Konnections",
+    locationLabel: "Broome, Western Australia",
+    coordinates: { lat: -17.9614, lon: 122.2359 },
+    citations: [
+      {
+        label: "Blancco Drive Eraser (certified erasure + audit trail)",
+        url: "https://www.blancco.com/products/drive-eraser/"
+      }
+    ],
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Performed advanced board-level repairs on phones, tablets, and consoles.",
+          "Improved repair success rate and customer satisfaction through component-level diagnostics."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Technologies",
+        items: ["Microscope soldering station", "Hot-air rework tools", "Multimeters"]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "Hands-on technical craftsmanship: precision work under a microscope, structured fault isolation, and disciplined rework practices."
+      }
+    ]
+  },
+  {
+    id: "waec-it-tech",
+    stageTitle: "Scroll stage 6",
+    heading: "IT Technician — Western Australian Electoral Commission",
+    locationLabel: "Perth, Western Australia",
+    coordinates: { lat: -31.9523, lon: 115.8613 },
+    citations: [
+      {
+        label: "ABN Lookup: ABN 56 660 664 826 (RIGHT PLACE GEOSPATIAL PTY LTD)",
+        url: "https://abr.business.gov.au/ABN/View?abn=56660664826"
+      },
+      {
+        label: "AWS Elemental MediaConvert features",
+        url: "https://aws.amazon.com/mediaconvert/features/"
+      }
+    ],
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Assisted with secure decommissioning of election equipment.",
+          "Performed certified data sanitisation using Blancco and produced audit evidence."
+        ]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "Operational security in practice: confidentiality and integrity of sensitive electoral data, supported by certified erasure workflows and reporting."
+      }
+    ]
+  },
+  {
+    id: "right-place-geospatial",
+    stageTitle: "Scroll stage 7",
+    heading: "Cloud Architect — Right Place Geospatial (ABN 56 660 664 826)",
+    locationLabel: "Western Australia (6163 region)",
+    coordinates: { lat: -32.12, lon: 115.85 },
+    sections: [
+      {
+        type: "bullets",
+        title: "Achievements",
+        items: [
+          "Designed and implemented scalable AWS infrastructure with Terraform (IaC).",
+          "Automated deployment of networks, compute, and databases; integrated CDN delivery and IAM security controls.",
+          "Integrated AWS Elemental MediaConvert to transcode geospatial video/imagery into multiple formats."
+        ]
+      },
+      {
+        type: "bullets",
+        title: "Services",
+        items: ["S3", "Lambda", "API Gateway", "CloudFront", "IAM", "Elemental MediaConvert", "Terraform"]
+      },
+      {
+        type: "text",
+        title: "Narrative",
+        text: "Infrastructure-as-Code and production cloud architecture for geospatial pipelines, emphasising repeatability, security boundaries, and delivery at scale."
+      }
+    ]
+  }
+];
+

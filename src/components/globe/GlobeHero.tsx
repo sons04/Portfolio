@@ -1,8 +1,9 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { Html, OrbitControls, ScrollControls, Scroll, useScroll } from "@react-three/drei";
 import { Bloom, EffectComposer, SMAA, SSAO } from "@react-three/postprocessing";
+import { timelineNodes, type TimelineNode } from "./timelineData";
 
 type QualityTier = "low" | "mid" | "high";
 
@@ -52,6 +53,19 @@ function pickQualityTier(reducedMotion: boolean): QualityTier {
   if (deviceMemory && deviceMemory <= 4) return "mid";
   if (cores <= 4) return "mid";
   return "high";
+}
+
+function latLonToVector3(lat: number, lon: number, radius = 1) {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+  const x = -radius * Math.sin(phi) * Math.cos(theta);
+  const z = radius * Math.sin(phi) * Math.sin(theta);
+  const y = radius * Math.cos(phi);
+  return new THREE.Vector3(x, y, z);
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
 
 function Atmosphere({ radius = 1.03 }: { radius?: number }) {
@@ -430,24 +444,112 @@ function ArcLines({ arcCount = 18 }: { arcCount?: number }) {
   );
 }
 
+function TimelineMarkers({
+  nodes,
+  activeId,
+  onSelect
+}: {
+  nodes: TimelineNode[];
+  activeId: string;
+  onSelect: (id: string) => void;
+}) {
+  const group = useMemo(() => {
+    return nodes.map((n) => ({
+      id: n.id,
+      pos: latLonToVector3(n.coordinates.lat, n.coordinates.lon, 1.01)
+    }));
+  }, [nodes]);
+
+  return (
+    <group>
+      {group.map((m) => {
+        const isActive = m.id === activeId;
+        return (
+          <mesh
+            key={m.id}
+            position={m.pos}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(m.id);
+            }}
+          >
+            <sphereGeometry args={[isActive ? 0.022 : 0.016, 16, 16]} />
+            <meshStandardMaterial
+              color={isActive ? "#ffffff" : "#6fe7ff"}
+              emissive={isActive ? "#6fe7ff" : "#2aa9c8"}
+              emissiveIntensity={isActive ? 2.2 : 1.2}
+              roughness={0.4}
+              metalness={0.1}
+              transparent
+              opacity={isActive ? 1 : 0.9}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function CameraTimelineRig({
+  nodes,
+  activeIndex,
+  paused,
+  autoRotate,
+  controlsRef
+}: {
+  nodes: TimelineNode[];
+  activeIndex: number;
+  paused: boolean;
+  autoRotate: boolean;
+  controlsRef: React.RefObject<any>;
+}) {
+  const { camera } = useThree();
+
+  const desiredTarget = useMemo(() => new THREE.Vector3(), []);
+  const desiredPos = useMemo(() => new THREE.Vector3(), []);
+
+  useFrame((_s, dt) => {
+    const node = nodes[clamp(activeIndex, 0, nodes.length - 1)];
+    const target = latLonToVector3(node.coordinates.lat, node.coordinates.lon, 0.98);
+    desiredTarget.copy(target);
+
+    // Put camera a fixed distance “in front” of the target direction.
+    const dist = 3.1;
+    desiredPos.copy(target).normalize().multiplyScalar(dist);
+
+    const t = 1 - Math.pow(0.0008, dt); // smooth, framerate-independent
+    camera.position.lerp(desiredPos, t);
+
+    if (controlsRef.current) {
+      controlsRef.current.enableDamping = true;
+      controlsRef.current.dampingFactor = 0.1;
+      controlsRef.current.enablePan = false;
+      controlsRef.current.autoRotate = autoRotate && !paused;
+      controlsRef.current.autoRotateSpeed = 0.35;
+      controlsRef.current.target.lerp(desiredTarget, t);
+      controlsRef.current.update();
+    } else {
+      camera.lookAt(desiredTarget);
+    }
+  });
+
+  return null;
+}
+
 function Scene({
   quality,
   paused,
   autoRotate,
-  onPick
+  activeIndex,
+  onSelectNode
 }: {
   quality: QualityTier;
   paused: boolean;
   autoRotate: boolean;
-  onPick: (p: THREE.Vector3) => void;
+  activeIndex: number;
+  onSelectNode: (id: string) => void;
 }) {
-  const controlsRef = useRef<THREE.EventDispatcher>(null);
-
-  useFrame((_state, _dt) => {
-    // OrbitControls updates internally; we keep the frame loop simple here.
-    // (Auto-rotate is handled by OrbitControls props.)
-    void controlsRef.current;
-  });
+  const controlsRef = useRef<any>(null);
 
   const enablePost = quality !== "low" && !paused;
   const enableSSAO = quality === "high" && !paused;
@@ -460,29 +562,31 @@ function Scene({
       <directionalLight position={[3, 2, 4]} intensity={1.25} />
       <pointLight position={[-3, -1.5, -4]} intensity={0.35} />
 
-      <group
-        onClick={(e) => {
-          e.stopPropagation();
-          onPick(e.point.clone());
-        }}
-      >
+      <group>
         <EarthBase />
         <EarthHoloGrid />
         <GlowPoints count={quality === "low" ? 500 : 1400} opacity={0.55} />
         <ArcLines arcCount={quality === "low" ? 10 : 18} />
+        <TimelineMarkers
+          nodes={timelineNodes}
+          activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
+          onSelect={onSelectNode}
+        />
         <Atmosphere />
       </group>
 
       <OrbitControls
-        ref={controlsRef as any}
-        enablePan={false}
-        enableDamping
-        dampingFactor={0.08}
+        ref={controlsRef}
         rotateSpeed={0.6}
-        minDistance={2.2}
-        maxDistance={5.4}
-        autoRotate={autoRotate && !paused}
-        autoRotateSpeed={0.35}
+        minDistance={2.0}
+        maxDistance={5.6}
+      />
+      <CameraTimelineRig
+        nodes={timelineNodes}
+        activeIndex={activeIndex}
+        paused={paused}
+        autoRotate={autoRotate}
+        controlsRef={controlsRef}
       />
 
       {enablePost && (
@@ -517,6 +621,8 @@ export default function GlobeHero() {
   const [paused, setPaused] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [quality, setQuality] = useState<QualityTier>("high");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollElRef = useRef<HTMLElement | null>(null);
   const [tooltip, setTooltip] = useState<{
     label: string;
     position: THREE.Vector3;
@@ -562,6 +668,8 @@ export default function GlobeHero() {
     );
   }
 
+  const pages = timelineNodes.length;
+
   return (
     <>
       <Canvas
@@ -573,37 +681,41 @@ export default function GlobeHero() {
           powerPreference: "high-performance"
         }}
       >
-        <Suspense fallback={null}>
-          <Scene
-            quality={quality}
+        <ScrollControls pages={pages} damping={0.22} distance={1}>
+          <ScrollElBridge onReady={(el) => (scrollElRef.current = el)} />
+          <TimelineScrollDriver
             paused={paused}
-            autoRotate={autoRotate}
-            onPick={(p) =>
-              setTooltip({
-                label: "Selected point",
-                position: p.clone()
-              })
-            }
+            reducedMotion={reducedMotion}
+            onStage={(i) => setActiveIndex(i)}
           />
-          {tooltip && (
-            <Html position={tooltip.position} center>
-              <div
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.16)",
-                  background: "rgba(0,0,0,0.35)",
-                  backdropFilter: "blur(8px)",
-                  color: "rgba(255,255,255,0.9)",
-                  fontSize: 12,
-                  whiteSpace: "nowrap"
+
+          <Scroll>
+            <Suspense fallback={null}>
+              <Scene
+                quality={quality}
+                paused={paused}
+                autoRotate={autoRotate}
+                activeIndex={activeIndex}
+                onSelectNode={(id) => {
+                  const idx = timelineNodes.findIndex((n) => n.id === id);
+                  if (idx >= 0) {
+                    setActiveIndex(idx);
+                    const el = scrollElRef.current;
+                    if (el && pages > 1) {
+                      const maxScroll = el.scrollHeight - el.clientHeight;
+                      el.scrollTop = (idx / (pages - 1)) * maxScroll;
+                    }
+                  }
+                  setTooltip(null);
                 }}
-              >
-                {tooltip.label}
-              </div>
-            </Html>
-          )}
-        </Suspense>
+              />
+            </Suspense>
+          </Scroll>
+
+          <Scroll html>
+            <TimelineOverlay activeIndex={activeIndex} />
+          </Scroll>
+        </ScrollControls>
       </Canvas>
 
       <div className="globeHud" aria-label="Globe controls">
@@ -624,6 +736,117 @@ export default function GlobeHero() {
         <span className="hint">Drag to rotate • Scroll to zoom</span>
       </div>
     </>
+  );
+}
+
+function ScrollElBridge({ onReady }: { onReady: (el: HTMLElement) => void }) {
+  const scroll = useScroll();
+  const done = useRef(false);
+
+  useEffect(() => {
+    if (done.current) return;
+    if (!scroll?.el) return;
+    done.current = true;
+    onReady(scroll.el);
+  }, [onReady, scroll]);
+
+  return null;
+}
+
+function TimelineScrollDriver({
+  paused,
+  reducedMotion,
+  onStage
+}: {
+  paused: boolean;
+  reducedMotion: boolean;
+  onStage: (idx: number) => void;
+}) {
+  const scroll = useScroll();
+  const last = useRef(-1);
+
+  useFrame(() => {
+    if (paused) return;
+    if (reducedMotion) return;
+
+    const n = timelineNodes.length;
+    const idx = clamp(Math.round(scroll.offset * (n - 1)), 0, n - 1);
+    if (idx !== last.current) {
+      last.current = idx;
+      onStage(idx);
+    }
+  });
+
+  return null;
+}
+
+function TimelineOverlay({ activeIndex }: { activeIndex: number }) {
+  const node = timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)];
+  return (
+    <div className="timelineOverlay">
+      <div className="glassCard" role="region" aria-label="Experience details">
+        <div className="glassTop">
+          <div className="glassKicker">{node.locationLabel}</div>
+          <div className="glassTitleRow">
+            <h3 className="glassTitle">{node.heading}</h3>
+            {node.timeframe ? (
+              <span className="glassMeta">{node.timeframe}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="glassBody">
+          {node.sections.map((s) => {
+            if (s.type === "text") {
+              return (
+                <div key={s.title} className="glassSection">
+                  <div className="glassSectionTitle">{s.title}</div>
+                  <div className="glassText">{s.text}</div>
+                </div>
+              );
+            }
+            return (
+              <div key={s.title} className="glassSection">
+                <div className="glassSectionTitle">{s.title}</div>
+                <ul className="glassList">
+                  {s.items.map((it) => (
+                    <li key={it}>{it}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+        {node.citations?.length ? (
+          <div className="glassCitations" aria-label="Citations">
+            <div className="glassSectionTitle">Citations</div>
+            <ul className="glassCiteList">
+              {node.citations.map((c) => (
+                <li key={c.url}>
+                  <a href={c.url} target="_blank" rel="noreferrer">
+                    {c.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="glassFooter">
+          <div className="progressPips" aria-label="Timeline progress">
+            {timelineNodes.map((n, i) => (
+              <span
+                key={n.id}
+                className={i === activeIndex ? "pip pipActive" : "pip"}
+                aria-hidden="true"
+              />
+            ))}
+          </div>
+          <div className="glassHint">Scroll to travel • Click nodes to focus</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
