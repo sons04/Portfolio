@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, ScrollControls, Scroll, useScroll } from "@react-three/drei";
 import { Bloom, EffectComposer, SMAA, SSAO } from "@react-three/postprocessing";
-import { timelineNodes, type TimelineNode } from "./timelineData";
+import { timelineNodes, type TimelineNode } from "./timeline";
+import { clamp, latLonToVector3, vector3ToLatLon } from "./geo";
 
 type QualityTier = "low" | "mid" | "high";
 
@@ -53,19 +54,6 @@ function pickQualityTier(reducedMotion: boolean): QualityTier {
   if (deviceMemory && deviceMemory <= 4) return "mid";
   if (cores <= 4) return "mid";
   return "high";
-}
-
-function latLonToVector3(lat: number, lon: number, radius = 1) {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
-  const x = -radius * Math.sin(phi) * Math.cos(theta);
-  const z = radius * Math.sin(phi) * Math.sin(theta);
-  const y = radius * Math.cos(phi);
-  return new THREE.Vector3(x, y, z);
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
 }
 
 function Atmosphere({ radius = 1.03 }: { radius?: number }) {
@@ -541,13 +529,15 @@ function Scene({
   paused,
   autoRotate,
   activeIndex,
-  onSelectNode
+  onSelectNode,
+  onSurfacePick
 }: {
   quality: QualityTier;
   paused: boolean;
   autoRotate: boolean;
   activeIndex: number;
   onSelectNode: (id: string) => void;
+  onSurfacePick: (p: THREE.Vector3) => void;
 }) {
   const controlsRef = useRef<any>(null);
 
@@ -562,7 +552,12 @@ function Scene({
       <directionalLight position={[3, 2, 4]} intensity={1.25} />
       <pointLight position={[-3, -1.5, -4]} intensity={0.35} />
 
-      <group>
+      <group
+        onClick={(e) => {
+          e.stopPropagation();
+          onSurfacePick(e.point.clone());
+        }}
+      >
         <EarthBase />
         <EarthHoloGrid />
         <GlowPoints count={quality === "low" ? 500 : 1400} opacity={0.55} />
@@ -707,6 +702,13 @@ export default function GlobeHero() {
                     }
                   }
                   setTooltip(null);
+                }}
+                onSurfacePick={(p) => {
+                  const { lat, lon } = vector3ToLatLon(p);
+                  setTooltip({
+                    label: `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`,
+                    position: p.clone().normalize().multiplyScalar(1.07)
+                  });
                 }}
               />
             </Suspense>
