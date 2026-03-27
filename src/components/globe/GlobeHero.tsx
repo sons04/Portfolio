@@ -68,7 +68,10 @@ function pickQualityTier(reducedMotion: boolean): QualityTier {
   const cores = navigator.hardwareConcurrency ?? 4;
   const deviceMemory = (navigator as Navigator & { deviceMemory?: number })
     .deviceMemory;
+  const prefersCoarsePointer =
+    window.matchMedia?.("(pointer: coarse)").matches ?? false;
 
+  if (prefersCoarsePointer) return "mid";
   if (deviceMemory && deviceMemory <= 4) return "mid";
   if (cores <= 4) return "mid";
   return "high";
@@ -655,7 +658,7 @@ export default function GlobeHero() {
         aria-label="Interactive 3D globe"
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
-        style={{ touchAction: "none" }}
+        style={{ touchAction: isExplore ? "none" : "pan-y" }}
       >
         <Canvas
           className="globeCanvas"
