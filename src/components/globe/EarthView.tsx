@@ -1,19 +1,26 @@
 import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useLoader, useThree } from "@react-three/fiber";
+import { feature } from "topojson-client";
+import landAtlas from "world-atlas/land-110m.json";
+import { latLonToVector3 } from "./geo";
 import { theme } from "../../styles/theme";
 
 const EARTH_DAY_URL =
-  "https://upload.wikimedia.org/wikipedia/commons/c/c3/Solarsystemscope_texture_2k_earth_daymap.jpg";
+  "/textures/earth-day-real.jpg";
 const EARTH_NIGHT_URL =
-  "https://threejs.org/examples/textures/planets/earth_lights_2048.png";
+  "/textures/earth-lights.png";
 const EARTH_NORMAL_URL =
-  "https://threejs.org/examples/textures/planets/earth_normal_2048.jpg";
+  "/textures/earth-normal.jpg";
 const EARTH_SPECULAR_URL =
-  "https://threejs.org/examples/textures/planets/earth_specular_2048.jpg";
+  "/textures/earth-specular.jpg";
 const EARTH_CLOUDS_URL =
-  "https://threejs.org/examples/textures/planets/earth_clouds_1024.png";
+  "/textures/earth-clouds.png";
 const DEFAULT_SUN_DIRECTION = new THREE.Vector3(4, 2.5, 3).normalize();
+
+function getBrightnessBoost(dimAmount: number) {
+  return 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
+}
 
 function configureTexture(
   texture: THREE.Texture,
@@ -30,15 +37,76 @@ function configureTexture(
   texture.needsUpdate = true;
 }
 
-function RealisticEarth({ sunDirection }: { sunDirection: THREE.Vector3 }) {
-  const { gl } = useThree();
-  const loader = useMemo(() => {
-    const instance = new THREE.TextureLoader();
-    instance.setCrossOrigin("anonymous");
-    return instance;
-  }, []);
+type LonLat = [number, number];
 
-  const [dayTex, normalTex, specularTex, nightTex, cloudsTex] = useLoader(loader, [
+function appendRingSegments(target: number[], ring: LonLat[], radius: number) {
+  if (ring.length < 2) return;
+
+  let prevLon = ring[0][0];
+  let prev = latLonToVector3(ring[0][1], ring[0][0], radius);
+
+  for (let i = 1; i < ring.length; i++) {
+    const [lon, lat] = ring[i];
+    const next = latLonToVector3(lat, lon, radius);
+
+    if (Math.abs(lon - prevLon) > 180) {
+      prev = next;
+    } else {
+      target.push(prev.x, prev.y, prev.z, next.x, next.y, next.z);
+      prev = next;
+    }
+
+    prevLon = lon;
+  }
+}
+
+function appendGeometrySegments(
+  target: number[],
+  coordinates: unknown,
+  radius: number
+) {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return;
+
+  const first = coordinates[0];
+  if (!Array.isArray(first)) return;
+
+  if (typeof first[0] === "number") {
+    appendRingSegments(target, coordinates as LonLat[], radius);
+    return;
+  }
+
+  for (const nested of coordinates as unknown[]) {
+    appendGeometrySegments(target, nested, radius);
+  }
+}
+
+function makeFeatureLineGeometry(geojson: any, radius: number) {
+  const features = geojson.type === "FeatureCollection" ? geojson.features : [geojson];
+  const positions: number[] = [];
+
+  for (const entry of features) {
+    const geometry = entry?.geometry;
+    if (!geometry?.coordinates) continue;
+    appendGeometrySegments(positions, geometry.coordinates, radius);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function RealisticEarth({
+  sunDirection,
+  dimAmount
+}: {
+  sunDirection: THREE.Vector3;
+  dimAmount: number;
+}) {
+  const { gl } = useThree();
+  const brightnessBoost = getBrightnessBoost(dimAmount);
+
+  const [dayTex, normalTex, specularTex, nightTex, cloudsTex] = useLoader(THREE.TextureLoader, [
     EARTH_DAY_URL,
     EARTH_NORMAL_URL,
     EARTH_SPECULAR_URL,
@@ -62,27 +130,79 @@ function RealisticEarth({ sunDirection }: { sunDirection: THREE.Vector3 }) {
         <meshPhongMaterial
           map={dayTex}
           normalMap={normalTex}
-          normalScale={new THREE.Vector2(0.55, 0.55)}
+          normalScale={new THREE.Vector2(0.38, 0.38)}
           specularMap={specularTex}
-          specular={new THREE.Color("#88b7e8")}
-          shininess={20}
-          color={new THREE.Color("#ffffff")}
-          emissive={new THREE.Color("#01040a")}
-          emissiveIntensity={0.008}
+          specular={new THREE.Color("#96c1ea")}
+          shininess={24}
+          color={new THREE.Color().setScalar(1.06 + brightnessBoost * 0.08)}
+          emissiveMap={dayTex}
+          emissive={new THREE.Color("#1a2026")}
+          emissiveIntensity={0.08 + brightnessBoost * 0.04}
         />
       </mesh>
+      <MapOverlay sunDirection={sunDirection} dimAmount={dimAmount} />
       <OceanHighlights specularTex={specularTex} sunDirection={sunDirection} />
       <NightLights nightTex={nightTex} sunDirection={sunDirection} />
-      <CloudLayer cloudTex={cloudsTex} scale={1.012} opacity={0.1} speed={0.024} />
-      <CloudLayer cloudTex={cloudsTex} scale={1.018} opacity={0.05} speed={0.016} />
+      <CloudLayer
+        cloudTex={cloudsTex}
+        scale={1.012}
+        opacity={0.08 + brightnessBoost * 0.04}
+        speed={0.022}
+      />
+      <CloudLayer
+        cloudTex={cloudsTex}
+        scale={1.018}
+        opacity={0.035 + brightnessBoost * 0.02}
+        speed={0.014}
+      />
       <Atmosphere sunDirection={sunDirection} />
     </group>
   );
 }
 
-function ProceduralEarthFallback() {
+function MapOverlay({
+  sunDirection,
+  dimAmount
+}: {
+  sunDirection: THREE.Vector3;
+  dimAmount: number;
+}) {
+  const brightnessBoost = getBrightnessBoost(dimAmount);
+  const landGeometry = useMemo(() => {
+    const landGeo = feature(
+      landAtlas as any,
+      (landAtlas as { objects: { land: any } }).objects.land
+    );
+    return makeFeatureLineGeometry(landGeo, 1.0045);
+  }, []);
+  const daylight = sunDirection.clone().normalize().z;
+  const landOpacity = 0.16 + brightnessBoost * 0.05 + Math.max(0, daylight) * 0.03;
+
+  useEffect(() => {
+    return () => {
+      landGeometry.dispose();
+    };
+  }, [landGeometry]);
+
+  return (
+    <group>
+      <lineSegments geometry={landGeometry}>
+        <lineBasicMaterial
+          color="#98c6f0"
+          transparent
+          opacity={landOpacity}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </lineSegments>
+    </group>
+  );
+}
+
+function ProceduralEarthFallback({ dimAmount }: { dimAmount: number }) {
   const { gl } = useThree();
   const { tex } = useMemo(() => makeProceduralTexture(1024), []);
+  const brightnessBoost = getBrightnessBoost(dimAmount);
 
   useEffect(() => {
     tex.anisotropy = Math.min(12, gl.capabilities.getMaxAnisotropy());
@@ -93,11 +213,11 @@ function ProceduralEarthFallback() {
       <sphereGeometry args={[1, 128, 128]} />
       <meshStandardMaterial
         map={tex}
-        color={new THREE.Color(0xffffff)}
+        color={new THREE.Color().setScalar(1 + brightnessBoost * 0.08)}
         metalness={0}
         roughness={0.9}
         emissive={new THREE.Color(theme.colors.bg)}
-        emissiveIntensity={0}
+        emissiveIntensity={brightnessBoost * 0.08}
       />
     </mesh>
   );
@@ -138,11 +258,11 @@ function NightLights({
 
           void main() {
             float daylight = max(dot(normalize(vNormalW), normalize(uSunDirection)), 0.0);
-            float nightMask = smoothstep(0.2, -0.12, daylight);
+            float nightMask = smoothstep(0.08, -0.04, daylight);
             vec3 lights = texture2D(uNightMap, vUv).rgb;
-            float twinkle = 0.92 + 0.08 * sin(uTime * 0.5 + vUv.x * 42.0 + vUv.y * 17.0);
-            vec3 color = lights * nightMask * twinkle * 1.15;
-            gl_FragColor = vec4(color, nightMask * 0.92);
+            float twinkle = 0.96 + 0.04 * sin(uTime * 0.38 + vUv.x * 28.0 + vUv.y * 12.0);
+            vec3 color = lights * nightMask * twinkle * 0.45;
+            gl_FragColor = vec4(color, nightMask * 0.24);
           }
         `,
         transparent: true,
@@ -297,10 +417,10 @@ function OceanHighlights({
             vec3 halfVec = normalize(lightDir + viewDir);
             float daylight = max(dot(normal, lightDir), 0.0);
             float oceanMask = texture2D(uSpecularMap, vUv).r;
-            float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 4.5);
-            float specular = pow(max(dot(normal, halfVec), 0.0), 110.0);
-            float alpha = oceanMask * daylight * (specular * 0.85 + fresnel * 0.12);
-            vec3 color = mix(vec3(0.18, 0.34, 0.55), vec3(0.84, 0.94, 1.0), clamp(specular, 0.0, 1.0));
+            float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 4.15);
+            float specular = pow(max(dot(normal, halfVec), 0.0), 88.0);
+            float alpha = oceanMask * daylight * (specular * 0.54 + fresnel * 0.08);
+            vec3 color = mix(vec3(0.18, 0.34, 0.55), vec3(0.78, 0.9, 1.0), clamp(specular, 0.0, 1.0));
             gl_FragColor = vec4(color, alpha);
           }
         `,
@@ -364,7 +484,7 @@ function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
       new THREE.ShaderMaterial({
         uniforms: {
           uSunDirection: { value: sunDirection.clone().normalize() },
-          uGlowColor: { value: new THREE.Color("#5ea8ff") }
+          uGlowColor: { value: new THREE.Color("#69b4ff") }
         },
         vertexShader: `
           varying vec3 vNormalW;
@@ -385,9 +505,9 @@ function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
 
           void main() {
             vec3 viewDir = normalize(cameraPosition - vWorldPos);
-            float fresnel = pow(1.0 - max(dot(viewDir, normalize(vNormalW)), 0.0), 3.5);
-            float sunScatter = pow(max(dot(normalize(vNormalW), normalize(uSunDirection)), 0.0), 1.8);
-            float alpha = fresnel * (0.18 + sunScatter * 0.28);
+            float fresnel = pow(1.0 - max(dot(viewDir, normalize(vNormalW)), 0.0), 3.7);
+            float sunScatter = pow(max(dot(normalize(vNormalW), normalize(uSunDirection)), 0.0), 1.9);
+            float alpha = fresnel * (0.16 + sunScatter * 0.22);
             gl_FragColor = vec4(uGlowColor, alpha);
           }
         `,
@@ -405,34 +525,42 @@ function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
   }, [material, sunDirection]);
 
   return (
-    <mesh scale={1.07}>
+    <mesh scale={1.06}>
       <sphereGeometry args={[1, 96, 96]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
 }
 
-function EarthBase({ sunDirection }: { sunDirection: THREE.Vector3 }) {
+function EarthBase({
+  sunDirection,
+  dimAmount
+}: {
+  sunDirection: THREE.Vector3;
+  dimAmount: number;
+}) {
   return (
     <group>
       <Suspense
         fallback={
           <group>
-            <ProceduralEarthFallback />
+            <ProceduralEarthFallback dimAmount={dimAmount} />
             <Atmosphere sunDirection={sunDirection} />
           </group>
         }
       >
-        <RealisticEarth sunDirection={sunDirection} />
+        <RealisticEarth sunDirection={sunDirection} dimAmount={dimAmount} />
       </Suspense>
     </group>
   );
 }
 
-export function Earth({
-  sunDirection = DEFAULT_SUN_DIRECTION
+export function EarthView({
+  sunDirection = DEFAULT_SUN_DIRECTION,
+  dimAmount = 0.5
 }: {
   sunDirection?: THREE.Vector3;
+  dimAmount?: number;
 }) {
-  return <EarthBase sunDirection={sunDirection} />;
+  return <EarthBase sunDirection={sunDirection} dimAmount={dimAmount} />;
 }

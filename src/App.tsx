@@ -1,4 +1,6 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
+import { GlassCard } from "./ui/GlassCard";
+import { Pill } from "./ui/Pill";
 
 const GlobeHero = React.lazy(() => import("./components/globe/GlobeHero"));
 const SkillsGalaxy = React.lazy(() => import("./components/skills/SkillsGalaxy"));
@@ -10,33 +12,82 @@ const ContactSection = React.lazy(
 );
 
 export function App() {
+  const [navHidden, setNavHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastScrollYRef.current;
+
+      if (currentScrollY < 24) {
+        setNavHidden(false);
+      } else if (delta > 8) {
+        setNavHidden(true);
+      } else if (delta < -8) {
+        setNavHidden(false);
+      }
+
+      lastScrollYRef.current = currentScrollY;
+    };
+
+    lastScrollYRef.current = window.scrollY;
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <div>
-      <div className="page">
-        <section className="heroStack">
-          <div className="card heroCard">
+    <div className="appShell">
+      <header className={`siteNavWrap ${navHidden ? "siteNavWrapHidden" : ""}`}>
+        <nav className="siteNav" aria-label="Primary">
+          <a className="siteBrand" href="#hero">
+            <span className="siteBrandDot" aria-hidden="true" />
+            Sergio Acosta
+          </a>
+
+          <div className="siteNavLinks">
+            <a href="#hero">Home</a>
+            <a href="#skills">Skills</a>
+            <a href="#projects">Projects</a>
+            <a href="#contact">Contact</a>
+          </div>
+
+          <a className="siteNavCta" href="#contact">
+            Let&apos;s talk
+          </a>
+        </nav>
+      </header>
+
+      <section id="hero" className="heroShell">
+        <div className="heroIntro">
+          <GlassCard variant="hero" className="heroCard">
             <div className="copy">
-              <div className="kicker">
-                <span className="kickerDot" aria-hidden="true" />
-                Futuristic Globe Portfolio
-              </div>
-              <h1 className="title">An interactive career timeline.</h1>
+              <h1 className="title">
+                Cloud architect, technical leader, microsoldering specialist, and
+                security-minded builder.
+              </h1>
               <p className="subtitle">
-                Scroll through milestones and watch the camera travel to each
-                location. Each node opens a glassmorphism brief with outcomes
-                and technologies, designed for quick recruiter readability.
+                Explore the globe to follow work across CTO leadership, cloud
+                architecture, cybersecurity, MicroPython systems, and
+                microsoldering services. Each stop is summarised for fast
+                recruiter scanning with outcomes, technologies, and context.
               </p>
 
               <div className="pillRow" aria-label="Stack">
-                <span className="pill">React</span>
-                <span className="pill">Vite</span>
-                <span className="pill">React Three Fiber</span>
-                <span className="pill">Drei</span>
-                <span className="pill">Postprocessing</span>
+                <Pill>AWS</Pill>
+                <Pill>Terraform</Pill>
+                <Pill>React</Pill>
+                <Pill>Angular</Pill>
+                <Pill>MicroPython</Pill>
+                <Pill>Microsoldering</Pill>
+                <Pill>Cybersecurity</Pill>
               </div>
             </div>
-          </div>
+          </GlassCard>
+        </div>
 
+        <div className="heroStage">
           <div className="card globeWrap globeWrapHero" aria-label="Interactive 3D globe">
             <Suspense
               fallback={
@@ -56,20 +107,22 @@ export function App() {
               <GlobeHero />
             </Suspense>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
-      <Suspense fallback={null}>
-        <SkillsGalaxy />
-      </Suspense>
+      <main className="page">
+        <Suspense fallback={null}>
+          <SkillsGalaxy />
+        </Suspense>
 
-      <Suspense fallback={null}>
-        <ProjectsCarousel />
-      </Suspense>
+        <Suspense fallback={null}>
+          <ProjectsCarousel />
+        </Suspense>
 
-      <Suspense fallback={null}>
-        <ContactSection />
-      </Suspense>
+        <Suspense fallback={null}>
+          <ContactSection />
+        </Suspense>
+      </main>
     </div>
   );
 }

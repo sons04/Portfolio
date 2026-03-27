@@ -1,9 +1,9 @@
 export const theme = {
   colors: {
     bg: "#040816",
-    primary: "#6fe7ff",
-    accent: "#00d4ff",
-    node: "#2dfcdb",
+    primary: "#52b8c8",
+    accent: "#40a8c0",
+    node: "#38c8b8",
     text: "#e6f1ff",
     muted: "#7f8fa6",
     earthOcean: "#0b2a5c",
