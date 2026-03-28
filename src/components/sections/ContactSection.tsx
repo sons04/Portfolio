@@ -125,6 +125,8 @@ export default function ContactSection() {
             <label className="field">
               <span>Name</span>
               <input
+                id="contact-name"
+                name="name"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -140,6 +142,8 @@ export default function ContactSection() {
             <label className="field">
               <span>Email</span>
               <input
+                id="contact-email"
+                name="email"
                 type="email"
                 placeholder="name@company.com"
                 value={email}
@@ -156,6 +160,8 @@ export default function ContactSection() {
             <label className="field">
               <span>Brief</span>
               <textarea
+                id="contact-brief"
+                name="brief"
                 placeholder="What are you building, what constraints matter, and what does success look like?"
                 rows={5}
                 value={brief}

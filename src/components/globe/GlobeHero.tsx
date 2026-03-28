@@ -250,15 +250,6 @@ function SpaceBackdrop({ quality }: { quality: QualityTier }) {
           depthWrite={false}
         />
       </points>
-      <mesh position={[0, 0, -16]} scale={[34, 24, 1]}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial
-          color="#17345c"
-          transparent
-          opacity={0.14}
-          depthWrite={false}
-        />
-      </mesh>
     </group>
   );
 }
@@ -437,8 +428,9 @@ function Scene({
   const globeRef = useRef<THREE.Group>(null);
 
   const enablePost = quality !== "low";
-  const enableSSAO = quality === "high";
-  const enableSMAA = quality === "high";
+  const enableSSAO = quality === "high" && !isExplore;
+  const enableSMAA = quality === "high" && !isExplore;
+  const bloomMipMapBlur = quality === "high" && !isExplore;
   const brightnessBoost = 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
   const ambientIntensity = 0.24 + brightnessBoost * 0.22;
   const hemisphereIntensity = 0.54 + brightnessBoost * 0.26;
@@ -536,7 +528,7 @@ function Scene({
             intensity={bloomIntensity}
             luminanceThreshold={0.7}
             luminanceSmoothing={0.2}
-            mipmapBlur
+            mipmapBlur={bloomMipMapBlur}
           />
           <Vignette offset={0.2} darkness={vignetteDarkness} />
           {enableSMAA ? <SMAA /> : <></>}
@@ -694,9 +686,12 @@ export default function GlobeHero() {
 
   const dpr: [number, number] = useMemo(() => {
     if (quality === "low") return [1, 1];
+    if (isExplore) {
+      return quality === "high" ? [1, 1.2] : [1, 1.1];
+    }
     if (quality === "mid") return [1, 1.25];
     return [1, 1.5];
-  }, [quality]);
+  }, [isExplore, quality]);
   const brightnessBoost = 1 - GLOBE_DIM;
   const toneMappingExposure = 1.1 + brightnessBoost * 0.6;
   const globeOverlayOpacity = !isPhoneViewport && cardVisible ? GLOBE_DIM * 0.04 : 0;
