@@ -19,6 +19,7 @@ interface MarkerProps {
   onSelect: (id: string) => void;
   onHover: (node: TimelineNode | null) => void;
   activeId: string;
+  persistActiveTooltip?: boolean;
   sunDirection?: THREE.Vector3;
 }
 
@@ -29,11 +30,19 @@ const RISE_AMOUNT = 1.018;
 const HOVER_SCALE = 1.08;
 const HOVER_LERP_SPEED = 6;
 
-export function Marker({ node, onSelect, onHover, activeId, sunDirection }: MarkerProps) {
+export function Marker({
+  node,
+  onSelect,
+  onHover,
+  activeId,
+  persistActiveTooltip = false,
+  sunDirection
+}: MarkerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const hoverProgress = useRef(0);
   const isActive = node.id === activeId;
+  const showTooltip = hovered || (persistActiveTooltip && isActive);
 
   const pos = useMemo(
     () =>
@@ -78,7 +87,7 @@ export function Marker({ node, onSelect, onHover, activeId, sunDirection }: Mark
         onHover(null);
         document.body.style.cursor = "";
       }}
-      onPointerDown={(e) => {
+      onClick={(e) => {
         e.stopPropagation();
         onSelect(node.id);
       }}
@@ -102,7 +111,7 @@ export function Marker({ node, onSelect, onHover, activeId, sunDirection }: Mark
       </group>
       <PulsingRing />
       <PinLine />
-      {(hovered || isActive) && (
+      {showTooltip && (
         <Html position={[0, 0.06, 0]} center>
           <div className="glass-tooltip markerTooltip">
             <span className="markerTooltipTitle">{node.heading}</span>

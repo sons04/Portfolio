@@ -9,7 +9,7 @@ interface GlobeState {
 }
 
 export const useGlobeStore = create<GlobeState>((set) => ({
-  mode: "narrative",
+  mode: "explore",
   setMode: (mode) => set({ mode }),
   toggleExplore: () =>
     set((s) => ({ mode: s.mode === "narrative" ? "explore" : "narrative" }))

@@ -12,8 +12,7 @@ import {
 } from "@react-three/postprocessing";
 import { timelineNodes, type TimelineNode } from "./timeline";
 import { Fade } from "../../ui/Fade";
-import { IconButton } from "../../ui/IconButton";
-import { clamp, latLonToVector3, vector3ToLatLon } from "./geo";
+import { clamp, latLonToVector3 } from "./geo";
 import { theme } from "../../styles/theme";
 import { EarthView } from "./EarthView";
 import { Marker } from "./Marker";
@@ -49,6 +48,20 @@ function usePrefersReducedMotion() {
     return () => media.removeEventListener?.("change", update);
   }, []);
   return reduced;
+}
+
+function useIsPhoneViewport() {
+  const [isPhoneViewport, setIsPhoneViewport] = useState(() => window.innerWidth <= 640);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsPhoneViewport(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  return isPhoneViewport;
 }
 
 function useDocumentVisibility(onHidden: () => void, onVisible: () => void) {
@@ -365,9 +378,8 @@ function Scene({
   autoRotate,
   activeIndex,
   onSelectNode,
-  onSurfacePick,
   onMarkerHover,
-  tooltip,
+  persistActiveMarkerTooltip,
   isExplore,
   mouseParallax
 }: {
@@ -377,9 +389,8 @@ function Scene({
   autoRotate: boolean;
   activeIndex: number;
   onSelectNode: (id: string) => void;
-  onSurfacePick: (localPoint: THREE.Vector3, tooltipWorld: THREE.Vector3) => void;
   onMarkerHover: (node: TimelineNode | null) => void;
-  tooltip: { label: string; position: THREE.Vector3 } | null;
+  persistActiveMarkerTooltip: boolean;
   isExplore: boolean;
   mouseParallax: { x: number; y: number };
 }) {
@@ -405,17 +416,12 @@ function Scene({
         onSelect={onSelectNode}
         onHover={onMarkerHover}
         activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
+        persistActiveTooltip={persistActiveMarkerTooltip}
         sunDirection={sunDir}
       />
     )),
-    [activeIndex, onSelectNode, onMarkerHover, sunDir]
+    [activeIndex, onSelectNode, onMarkerHover, persistActiveMarkerTooltip, sunDir]
   );
-  const handleSurfacePick = useCallback((worldPoint: THREE.Vector3) => {
-    if (!globeRef.current) return;
-    const localPoint = globeRef.current.worldToLocal(worldPoint.clone()).normalize();
-    const tooltipWorld = globeRef.current.localToWorld(localPoint.clone().multiplyScalar(1.07));
-    onSurfacePick(localPoint, tooltipWorld);
-  }, [onSurfacePick]);
 
   return (
     <>
@@ -435,12 +441,7 @@ function Scene({
       />
       <directionalLight position={[-2.2, 1.4, -3.5]} intensity={rimLightIntensity} castShadow={false} />
 
-      <group
-        onClick={(e) => {
-          e.stopPropagation();
-          handleSurfacePick(e.point.clone());
-        }}
-      >
+      <group>
         <RotatingGlobe paused={paused} isExplore={isExplore}>
           <group ref={globeRef} rotation={[GLOBE_TILT_RAD, 0, 0]}>
             <EarthView sunDirection={sunDir} dimAmount={dimAmount} />
@@ -449,14 +450,6 @@ function Scene({
           </group>
         </RotatingGlobe>
       </group>
-
-      {tooltip && (
-        <Html position={tooltip.position} center>
-          <div className="glass-tooltip">
-            <span>{tooltip.label}</span>
-          </div>
-        </Html>
-      )}
 
       <OrbitControls
         ref={controlsRef}
@@ -532,16 +525,13 @@ function RotatingGlobe({
 
 export default function GlobeHero() {
   const reducedMotion = usePrefersReducedMotion();
-  const { isExplore, toggleExplore, setMode } = useExploreMode();
+  const isPhoneViewport = useIsPhoneViewport();
+  const { isExplore, setMode } = useExploreMode();
   const [supported, setSupported] = useState(true);
   const [paused, setPaused] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [quality, setQuality] = useState<QualityTier>("high");
   const [activeIndex, setActiveIndex] = useState(0);
-  const [tooltip, setTooltip] = useState<{
-    label: string;
-    position: THREE.Vector3;
-  } | null>(null);
   const [cardVisible, setCardVisible] = useState(false);
   const [panelFade, setPanelFade] = useState(true);
   const [transitionLock, setTransitionLock] = useState(false);
@@ -554,8 +544,13 @@ export default function GlobeHero() {
   const goToStageIndex = useCallback((targetIndex: number) => {
     if (transitionLock) return;
     const clamped = clamp(targetIndex, 0, timelineNodes.length - 1);
-    setMode("narrative");
     setActiveIndex(clamped);
+    setMode("explore");
+    if (isPhoneViewport) {
+      setCardVisible(false);
+      return;
+    }
+
     setCardVisible(true);
     setTransitionLock(true);
     setPanelFade(false);
@@ -563,7 +558,7 @@ export default function GlobeHero() {
       setPanelFade(true);
       setTimeout(() => setTransitionLock(false), 250);
     }, 150);
-  }, [transitionLock, setMode]);
+  }, [isPhoneViewport, transitionLock, setMode]);
 
   const goToStage = useCallback((direction: 1 | -1) => {
     const target = clamp(
@@ -599,7 +594,7 @@ export default function GlobeHero() {
   }, [isExplore]);
 
   const handleMarkerHover = useCallback((node: TimelineNode | null) => {
-    if (node) setTooltip(null);
+    void node;
   }, []);
 
   useEffect(() => {
@@ -618,9 +613,21 @@ export default function GlobeHero() {
   useEffect(() => {
     // Cinematic rhythm: focus first, then fade card.
     setActiveIndex(0);
+    setMode("explore");
+    if (isPhoneViewport) {
+      setCardVisible(false);
+      return;
+    }
+
     const t = window.setTimeout(() => setCardVisible(true), 420);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [isPhoneViewport, setMode]);
+
+  useEffect(() => {
+    if (!isPhoneViewport) return;
+    setMode("explore");
+    setCardVisible(false);
+  }, [isPhoneViewport, setMode]);
 
   useDocumentVisibility(
     () => setPaused(true),
@@ -633,7 +640,7 @@ export default function GlobeHero() {
   }, [quality]);
   const brightnessBoost = 1 - GLOBE_DIM;
   const toneMappingExposure = 1.1 + brightnessBoost * 0.6;
-  const globeOverlayOpacity = cardVisible ? GLOBE_DIM * 0.04 : 0;
+  const globeOverlayOpacity = !isPhoneViewport && cardVisible ? GLOBE_DIM * 0.04 : 0;
 
   if (!supported) {
     return (
@@ -689,18 +696,10 @@ export default function GlobeHero() {
                 const idx = timelineNodes.findIndex((n) => n.id === id);
                 if (idx >= 0) {
                   goToStageIndex(idx);
-                  setTooltip(null);
                 }
               }}
-              onSurfacePick={(localPoint, tooltipWorld) => {
-                const { lat, lon } = vector3ToLatLon(localPoint);
-                setTooltip({
-                  label: `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`,
-                  position: tooltipWorld
-                });
-              }}
               onMarkerHover={handleMarkerHover}
-              tooltip={tooltip}
+              persistActiveMarkerTooltip={isPhoneViewport}
               isExplore={isExplore}
               mouseParallax={mouseParallax}
             />
@@ -714,48 +713,24 @@ export default function GlobeHero() {
           style={{ background: `rgba(4, 8, 22, ${globeOverlayOpacity})` }}
         />
 
-        <ExperienceCard
-          visible={cardVisible}
-          fadeActive={panelFade}
-          node={timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)]}
-          onClose={() => setCardVisible(false)}
-          onPrev={() => goToStage(-1)}
-          onNext={() => goToStage(1)}
-        />
+        {!isPhoneViewport && (
+          <ExperienceCard
+            visible={cardVisible}
+            fadeActive={panelFade}
+            node={timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)]}
+            onClose={() => setCardVisible(false)}
+            onPrev={() => goToStage(-1)}
+            onNext={() => goToStage(1)}
+          />
+        )}
 
         <div
           className={`globeExploreHint ${isExplore ? "globeExploreHint--visible" : ""}`}
           aria-live="polite"
         >
-          Drag to explore. Click markers to focus.
-        </div>
-
-        <div className="globeToggleRow" aria-label="Globe toggles">
-          <button
-            type="button"
-            className={`globeExplorePill ${isExplore ? "globeExplorePill--active" : ""}`}
-            onClick={toggleExplore}
-            aria-pressed={isExplore}
-            aria-label={isExplore ? "Exit explore mode" : "Enter explore mode"}
-          >
-            Explore
-          </button>
-          {!isExplore && (
-            <>
-              <IconButton
-                aria-label={autoRotate ? "Disable orbit" : "Enable orbit"}
-                onClick={() => setAutoRotate((v) => !v)}
-              >
-                {autoRotate ? "⟳" : "⊙"}
-              </IconButton>
-              <IconButton
-                aria-label={paused ? "Play" : "Pause"}
-                onClick={() => setPaused((v) => !v)}
-              >
-                {paused ? "▶" : "‖"}
-              </IconButton>
-            </>
-          )}
+          {isPhoneViewport
+            ? "Drag the globe and tap markers to view each role."
+            : "Drag to explore. Click markers to focus."}
         </div>
       </div>
     </>

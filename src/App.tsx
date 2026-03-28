@@ -13,7 +13,10 @@ const ContactSection = React.lazy(
 
 export function App() {
   const [navHidden, setNavHidden] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const lastScrollYRef = useRef(0);
+
+  const closeMobileNav = () => setMobileNavOpen(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -37,27 +40,90 @@ export function App() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 980) {
+        setMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (window.innerWidth > 980) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = mobileNavOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileNavOpen]);
+
   return (
     <div className="appShell">
       <header className={`siteNavWrap ${navHidden ? "siteNavWrapHidden" : ""}`}>
-        <nav className="siteNav" aria-label="Primary">
-          <a className="siteBrand" href="#hero">
+        <nav className={`siteNav ${mobileNavOpen ? "siteNavOpen" : ""}`} aria-label="Primary">
+          <a className="siteBrand" href="#hero" onClick={closeMobileNav}>
             <span className="siteBrandDot" aria-hidden="true" />
-            Sergio Acosta
+            <span className="siteBrandText">Sergio Acosta</span>
+            <span className="siteBrandTextCompact" aria-hidden="true">
+              SA
+            </span>
           </a>
 
-          <div className="siteNavLinks">
-            <a href="#hero">Home</a>
-            <a href="#skills">Skills</a>
-            <a href="#projects">Projects</a>
-            <a href="#contact">Contact</a>
+          <button
+            type="button"
+            className={`siteNavToggle ${mobileNavOpen ? "siteNavToggleOpen" : ""}`}
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            aria-controls="site-nav-menu"
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+
+          <div
+            id="site-nav-menu"
+            className={`siteNavMenu ${mobileNavOpen ? "siteNavMenuOpen" : ""}`}
+          >
+            <div className="siteNavLinks">
+              <a href="#hero" onClick={closeMobileNav}>Home</a>
+              <a href="#skills" onClick={closeMobileNav}>Skills</a>
+              <a href="#projects" onClick={closeMobileNav}>Projects</a>
+              <a href="#contact" onClick={closeMobileNav}>Contact</a>
+            </div>
+
+            <a className="siteNavCta" href="#contact" onClick={closeMobileNav}>
+              Let&apos;s talk
+            </a>
           </div>
-
-          <a className="siteNavCta" href="#contact">
-            Let&apos;s talk
-          </a>
         </nav>
       </header>
+      <button
+        type="button"
+        className={`siteNavBackdrop ${mobileNavOpen ? "siteNavBackdropVisible" : ""}`}
+        aria-label="Close navigation menu"
+        aria-hidden={!mobileNavOpen}
+        tabIndex={mobileNavOpen ? 0 : -1}
+        onClick={closeMobileNav}
+      />
 
       <section id="hero" className="heroShell">
         <div className="heroIntro">
