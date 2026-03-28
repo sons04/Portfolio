@@ -11,6 +11,78 @@ const ContactSection = React.lazy(
   () => import("./components/sections/ContactSection")
 );
 
+interface DeferredSectionProps {
+  anchorId: string;
+  minHeight: number;
+  children: React.ReactNode;
+}
+
+function DeferredSection({ anchorId, minHeight, children }: DeferredSectionProps) {
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
+  const [shouldRender, setShouldRender] = useState(
+    () => window.location.hash === `#${anchorId}`
+  );
+
+  useEffect(() => {
+    const loadFromHash = () => {
+      if (window.location.hash === `#${anchorId}`) {
+        setShouldRender(true);
+      }
+    };
+
+    loadFromHash();
+    window.addEventListener("hashchange", loadFromHash);
+    return () => window.removeEventListener("hashchange", loadFromHash);
+  }, [anchorId]);
+
+  useEffect(() => {
+    if (shouldRender) return;
+    if (!("IntersectionObserver" in window)) {
+      setShouldRender(true);
+      return;
+    }
+
+    const node = placeholderRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldRender(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [shouldRender]);
+
+  useEffect(() => {
+    if (!shouldRender || window.location.hash !== `#${anchorId}`) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(anchorId)?.scrollIntoView({ block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [anchorId, shouldRender]);
+
+  if (shouldRender) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div
+      ref={placeholderRef}
+      id={anchorId}
+      aria-hidden="true"
+      style={{ minHeight }}
+    />
+  );
+}
+
 export function App() {
   const [navHidden, setNavHidden] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -177,17 +249,23 @@ export function App() {
       </section>
 
       <main className="page">
-        <Suspense fallback={null}>
-          <SkillsGalaxy />
-        </Suspense>
+        <DeferredSection anchorId="skills" minHeight={540}>
+          <Suspense fallback={null}>
+            <SkillsGalaxy />
+          </Suspense>
+        </DeferredSection>
 
-        <Suspense fallback={null}>
-          <ProjectsCarousel />
-        </Suspense>
+        <DeferredSection anchorId="projects" minHeight={620}>
+          <Suspense fallback={null}>
+            <ProjectsCarousel />
+          </Suspense>
+        </DeferredSection>
 
-        <Suspense fallback={null}>
-          <ContactSection />
-        </Suspense>
+        <DeferredSection anchorId="contact" minHeight={420}>
+          <Suspense fallback={null}>
+            <ContactSection />
+          </Suspense>
+        </DeferredSection>
       </main>
     </div>
   );

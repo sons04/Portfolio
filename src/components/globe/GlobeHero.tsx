@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   Bloom,
@@ -23,6 +23,7 @@ function easeInOutCubic(t: number) {
 }
 
 type QualityTier = "low" | "mid" | "high";
+type MouseParallax = { x: number; y: number };
 const GLOBE_DIM = 0.08;
 
 function isWebGLAvailable(): boolean {
@@ -65,14 +66,22 @@ function useIsPhoneViewport() {
 }
 
 function useDocumentVisibility(onHidden: () => void, onVisible: () => void) {
+  const onHiddenRef = useRef(onHidden);
+  const onVisibleRef = useRef(onVisible);
+
+  useEffect(() => {
+    onHiddenRef.current = onHidden;
+    onVisibleRef.current = onVisible;
+  }, [onHidden, onVisible]);
+
   useEffect(() => {
     const handler = () => {
-      if (document.visibilityState === "hidden") onHidden();
-      else onVisible();
+      if (document.visibilityState === "hidden") onHiddenRef.current();
+      else onVisibleRef.current();
     };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [onHidden, onVisible]);
+  }, []);
 }
 
 function pickQualityTier(reducedMotion: boolean): QualityTier {
@@ -90,7 +99,13 @@ function pickQualityTier(reducedMotion: boolean): QualityTier {
   return "high";
 }
 
-function NetworkArcs({ nodes }: { nodes: TimelineNode[] }) {
+function NetworkArcs({
+  nodes,
+  quality
+}: {
+  nodes: TimelineNode[];
+  quality: QualityTier;
+}) {
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -131,6 +146,7 @@ function NetworkArcs({ nodes }: { nodes: TimelineNode[] }) {
 
   const lines = useMemo(() => {
     const objs: THREE.Line[] = [];
+    const pointCount = quality === "high" ? 64 : quality === "mid" ? 48 : 32;
     for (let i = 0; i < nodes.length - 1; i++) {
       const a = latLonToVector3(
         nodes[i].coordinates.lat,
@@ -144,7 +160,7 @@ function NetworkArcs({ nodes }: { nodes: TimelineNode[] }) {
       );
       const mid = a.clone().add(b).normalize().multiplyScalar(1.35);
       const curve = new THREE.CatmullRomCurve3([a, mid, b]);
-      const pts = curve.getPoints(80);
+      const pts = curve.getPoints(pointCount);
 
       const positions = new Float32Array(pts.length * 3);
       const tAttr = new Float32Array(pts.length);
@@ -164,7 +180,7 @@ function NetworkArcs({ nodes }: { nodes: TimelineNode[] }) {
       objs.push(line);
     }
     return objs;
-  }, [material, nodes]);
+  }, [material, nodes, quality]);
 
   useFrame((_s, dt) => {
     (material.uniforms.uTime.value as number) += dt;
@@ -187,7 +203,7 @@ const EXPLORE_MAX_DISTANCE = 4.4;
 
 function SpaceBackdrop({ quality }: { quality: QualityTier }) {
   const groupRef = useRef<THREE.Group>(null);
-  const count = quality === "high" ? 2400 : quality === "mid" ? 1400 : 800;
+  const count = quality === "high" ? 1800 : quality === "mid" ? 1100 : 600;
 
   const geometry = useMemo(() => {
     const positions = new Float32Array(count * 3);
@@ -255,7 +271,7 @@ function CameraTimelineRig({
   controlsRef,
   globeRef,
   isExplore,
-  mouseParallax
+  mouseParallaxRef
 }: {
   nodes: TimelineNode[];
   activeIndex: number;
@@ -264,15 +280,21 @@ function CameraTimelineRig({
   controlsRef: React.RefObject<OrbitControlsImpl | null>;
   globeRef: React.RefObject<THREE.Group | null>;
   isExplore: boolean;
-  mouseParallax: { x: number; y: number };
+  mouseParallaxRef: React.MutableRefObject<MouseParallax>;
 }) {
   const { camera } = useThree();
   const flyStartRef = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
   const flyProgressRef = useRef(1);
   const prevIndexRef = useRef(activeIndex);
+  const parallaxRef = useRef<MouseParallax>({ x: 0, y: 0 });
 
   const desiredTarget = useMemo(() => new THREE.Vector3(), []);
   const desiredPos = useMemo(() => new THREE.Vector3(), []);
+  const localLookTarget = useMemo(() => new THREE.Vector3(), []);
+  const localBasePos = useMemo(() => new THREE.Vector3(), []);
+  const worldBasePos = useMemo(() => new THREE.Vector3(), []);
+  const parallaxOffset = useMemo(() => new THREE.Vector3(), []);
+  const flyTarget = useMemo(() => new THREE.Vector3(), []);
 
   useEffect(() => {
     if (activeIndex !== prevIndexRef.current) {
@@ -289,30 +311,47 @@ function CameraTimelineRig({
     if (isExplore || !globeRef.current) return;
 
     const node = nodes[clamp(activeIndex, 0, nodes.length - 1)];
-    const localLookTarget = latLonToVector3(node.coordinates.lat, node.coordinates.lon, 0.98);
-    desiredTarget.copy(globeRef.current.localToWorld(localLookTarget.clone()));
+    latLonToVector3(
+      node.coordinates.lat,
+      node.coordinates.lon,
+      0.98,
+      localLookTarget
+    );
+    desiredTarget.copy(localLookTarget);
+    globeRef.current.localToWorld(desiredTarget);
 
     // Base position “in front” of the target direction.
     const dist = 3.1;
-    const localBasePos = localLookTarget.clone().normalize().multiplyScalar(dist);
+    localBasePos.copy(localLookTarget).normalize().multiplyScalar(dist);
     const drift = 0.0008 * Math.sin(_s.clock.getElapsedTime() * 0.3);
     const driftY = 0.0006 * Math.cos(_s.clock.getElapsedTime() * 0.23);
-    const parallaxOffset = new THREE.Vector3(
-      mouseParallax.x * 0.15 + drift,
-      mouseParallax.y * 0.15 + driftY,
+
+    const parallaxLerp = 1 - Math.pow(0.0006, dt);
+    parallaxRef.current.x += (
+      mouseParallaxRef.current.x - parallaxRef.current.x
+    ) * parallaxLerp;
+    parallaxRef.current.y += (
+      mouseParallaxRef.current.y - parallaxRef.current.y
+    ) * parallaxLerp;
+
+    parallaxOffset.set(
+      parallaxRef.current.x * 0.15 + drift,
+      parallaxRef.current.y * 0.15 + driftY,
       0
     );
-    desiredPos.copy(globeRef.current.localToWorld(localBasePos)).add(parallaxOffset);
+    worldBasePos.copy(localBasePos);
+    globeRef.current.localToWorld(worldBasePos);
+    desiredPos.copy(worldBasePos).add(parallaxOffset);
 
     if (flyStartRef.current && flyProgressRef.current < 1) {
       flyProgressRef.current = Math.min(1, flyProgressRef.current + dt / FLY_DURATION);
       const t = easeInOutCubic(flyProgressRef.current);
       camera.position.lerpVectors(flyStartRef.current.pos, desiredPos, t);
-      const target = new THREE.Vector3().lerpVectors(flyStartRef.current.target, desiredTarget, t);
+      flyTarget.lerpVectors(flyStartRef.current.target, desiredTarget, t);
       if (controlsRef.current) {
-        controlsRef.current.target.copy(target);
+        controlsRef.current.target.copy(flyTarget);
       }
-      camera.lookAt(target);
+      camera.lookAt(flyTarget);
       if (flyProgressRef.current >= 1) {
         flyStartRef.current = null;
       }
@@ -381,7 +420,7 @@ function Scene({
   onMarkerHover,
   persistActiveMarkerTooltip,
   isExplore,
-  mouseParallax
+  mouseParallaxRef
 }: {
   quality: QualityTier;
   dimAmount: number;
@@ -392,13 +431,14 @@ function Scene({
   onMarkerHover: (node: TimelineNode | null) => void;
   persistActiveMarkerTooltip: boolean;
   isExplore: boolean;
-  mouseParallax: { x: number; y: number };
+  mouseParallaxRef: React.MutableRefObject<MouseParallax>;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const globeRef = useRef<THREE.Group>(null);
 
   const enablePost = quality !== "low";
   const enableSSAO = quality === "high";
+  const enableSMAA = quality === "high";
   const brightnessBoost = 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
   const ambientIntensity = 0.24 + brightnessBoost * 0.22;
   const hemisphereIntensity = 0.54 + brightnessBoost * 0.26;
@@ -408,6 +448,7 @@ function Scene({
   const vignetteDarkness = 0.46 - brightnessBoost * 0.16;
 
   const sunDir = useMemo(() => new THREE.Vector3(0.9, 0.5, 5.6).normalize(), []);
+  const activeId = timelineNodes[activeIndex]?.id ?? timelineNodes[0].id;
   const markersMemo = useMemo(
     () => timelineNodes.map((n) => (
       <Marker
@@ -415,12 +456,12 @@ function Scene({
         node={n}
         onSelect={onSelectNode}
         onHover={onMarkerHover}
-        activeId={timelineNodes[activeIndex]?.id ?? timelineNodes[0].id}
+        isActive={n.id === activeId}
         persistActiveTooltip={persistActiveMarkerTooltip}
         sunDirection={sunDir}
       />
     )),
-    [activeIndex, onSelectNode, onMarkerHover, persistActiveMarkerTooltip, sunDir]
+    [activeId, onSelectNode, onMarkerHover, persistActiveMarkerTooltip, sunDir]
   );
 
   return (
@@ -444,9 +485,9 @@ function Scene({
       <group>
         <RotatingGlobe paused={paused} isExplore={isExplore}>
           <group ref={globeRef} rotation={[GLOBE_TILT_RAD, 0, 0]}>
-            <EarthView sunDirection={sunDir} dimAmount={dimAmount} />
+            <EarthView sunDirection={sunDir} dimAmount={dimAmount} quality={quality} />
             {markersMemo}
-            <NetworkArcs nodes={timelineNodes} />
+            <NetworkArcs nodes={timelineNodes} quality={quality} />
           </group>
         </RotatingGlobe>
       </group>
@@ -474,7 +515,7 @@ function Scene({
           controlsRef={controlsRef}
           globeRef={globeRef}
           isExplore={isExplore}
-          mouseParallax={mouseParallax}
+          mouseParallaxRef={mouseParallaxRef}
         />
       )}
 
@@ -498,7 +539,7 @@ function Scene({
             mipmapBlur
           />
           <Vignette offset={0.2} darkness={vignetteDarkness} />
-          <SMAA />
+          {enableSMAA ? <SMAA /> : <></>}
         </EffectComposer>
       )}
     </>
@@ -535,8 +576,8 @@ export default function GlobeHero() {
   const [cardVisible, setCardVisible] = useState(false);
   const [panelFade, setPanelFade] = useState(true);
   const [transitionLock, setTransitionLock] = useState(false);
-  const [mouseParallax, setMouseParallax] = useState({ x: 0, y: 0 });
   const wheelAccumRef = useRef(0);
+  const mouseParallaxRef = useRef<MouseParallax>({ x: 0, y: 0 });
 
   const activeIndexRef = useRef(0);
   activeIndexRef.current = activeIndex;
@@ -589,9 +630,14 @@ export default function GlobeHero() {
       const h = e.currentTarget.clientHeight;
       const x = (e.clientX - w / 2) / (w / 2);
       const y = -(e.clientY - h / 2) / (h / 2);
-      setMouseParallax({ x: x * 0.05, y: y * 0.05 });
+      mouseParallaxRef.current.x = x * 0.05;
+      mouseParallaxRef.current.y = y * 0.05;
     }
   }, [isExplore]);
+  const handleMouseLeave = useCallback(() => {
+    mouseParallaxRef.current.x = 0;
+    mouseParallaxRef.current.y = 0;
+  }, []);
 
   const handleMarkerHover = useCallback((node: TimelineNode | null) => {
     void node;
@@ -629,18 +675,37 @@ export default function GlobeHero() {
     setCardVisible(false);
   }, [isPhoneViewport, setMode]);
 
+  useEffect(() => {
+    if (!isExplore) return;
+    mouseParallaxRef.current.x = 0;
+    mouseParallaxRef.current.y = 0;
+  }, [isExplore]);
+
+  const handleDocumentHidden = useCallback(() => {
+    setPaused(true);
+  }, []);
+  const handleDocumentVisible = useCallback(() => {
+    setPaused(reducedMotion);
+  }, [reducedMotion]);
   useDocumentVisibility(
-    () => setPaused(true),
-    () => setPaused(reducedMotion)
+    handleDocumentHidden,
+    handleDocumentVisible
   );
 
   const dpr: [number, number] = useMemo(() => {
     if (quality === "low") return [1, 1];
-    return [1, 1.5]; /* Cap DPR for performance */
+    if (quality === "mid") return [1, 1.25];
+    return [1, 1.5];
   }, [quality]);
   const brightnessBoost = 1 - GLOBE_DIM;
   const toneMappingExposure = 1.1 + brightnessBoost * 0.6;
   const globeOverlayOpacity = !isPhoneViewport && cardVisible ? GLOBE_DIM * 0.04 : 0;
+  const handleSelectNode = useCallback((id: string) => {
+    const idx = timelineNodes.findIndex((n) => n.id === id);
+    if (idx >= 0) {
+      goToStageIndex(idx);
+    }
+  }, [goToStageIndex]);
 
   if (!supported) {
     return (
@@ -665,6 +730,7 @@ export default function GlobeHero() {
         aria-label="Interactive 3D globe"
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         style={{ touchAction: isExplore ? "none" : "pan-y" }}
       >
         <Canvas
@@ -692,16 +758,11 @@ export default function GlobeHero() {
               paused={paused}
               autoRotate={autoRotate && !reducedMotion}
               activeIndex={activeIndex}
-              onSelectNode={(id) => {
-                const idx = timelineNodes.findIndex((n) => n.id === id);
-                if (idx >= 0) {
-                  goToStageIndex(idx);
-                }
-              }}
+              onSelectNode={handleSelectNode}
               onMarkerHover={handleMarkerHover}
               persistActiveMarkerTooltip={isPhoneViewport}
               isExplore={isExplore}
-              mouseParallax={mouseParallax}
+              mouseParallaxRef={mouseParallaxRef}
             />
           </Suspense>
         </Canvas>

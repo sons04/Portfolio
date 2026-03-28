@@ -18,7 +18,7 @@ interface MarkerProps {
   node: TimelineNode;
   onSelect: (id: string) => void;
   onHover: (node: TimelineNode | null) => void;
-  activeId: string;
+  isActive: boolean;
   persistActiveTooltip?: boolean;
   sunDirection?: THREE.Vector3;
 }
@@ -30,18 +30,17 @@ const RISE_AMOUNT = 1.018;
 const HOVER_SCALE = 1.08;
 const HOVER_LERP_SPEED = 6;
 
-export function Marker({
+function MarkerComponent({
   node,
   onSelect,
   onHover,
-  activeId,
+  isActive,
   persistActiveTooltip = false,
   sunDirection
 }: MarkerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const hoverProgress = useRef(0);
-  const isActive = node.id === activeId;
   const showTooltip = hovered || (persistActiveTooltip && isActive);
 
   const pos = useMemo(
@@ -54,10 +53,13 @@ export function Marker({
     [node.coordinates.lat, node.coordinates.lon]
   );
 
+  const surfaceNormal = useMemo(() => pos.clone().normalize(), [pos]);
   const quat = useMemo(() => {
-    const normal = pos.clone().normalize();
-    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-  }, [pos]);
+    return new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      surfaceNormal
+    );
+  }, [surfaceNormal]);
 
   useFrame((_, dt) => {
     const target = hovered || isActive ? 1 : 0;
@@ -67,7 +69,7 @@ export function Marker({
   const p = easeOutCubic(Math.min(1, hoverProgress.current));
   const coreScale = hovered ? 1 + (HOVER_SCALE - 1) * p : 1 + (isActive ? 0.08 : 0) * p;
   const baseEmissive = 0.85 + (isActive ? 0.2 : 0) * p + (hovered ? 0.15 : 0) * p;
-  const litFactor = sunDirection ? sunDirection.dot(pos.clone().normalize()) : 0;
+  const litFactor = sunDirection ? sunDirection.dot(surfaceNormal) : 0;
   const emissiveIntensity = baseEmissive + (0.5 - 0.5 * litFactor) * 0.2;
 
   return (
@@ -122,6 +124,15 @@ export function Marker({
     </group>
   );
 }
+
+export const Marker = React.memo(MarkerComponent, (prev, next) => (
+  prev.node === next.node &&
+  prev.isActive === next.isActive &&
+  prev.persistActiveTooltip === next.persistActiveTooltip &&
+  prev.onSelect === next.onSelect &&
+  prev.onHover === next.onHover &&
+  prev.sunDirection === next.sunDirection
+));
 
 function GlowHalo() {
   return (
