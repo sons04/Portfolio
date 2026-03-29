@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { GlassCard } from "../../ui/GlassCard";
 import { IconButton } from "../../ui/IconButton";
+import { submitContactForm } from "../../lib/contactApi";
 
 const CONTACT = {
   email: "work.sergioacosta@gmail.com",
@@ -31,6 +32,11 @@ export default function ContactSection() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [brief, setBrief] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [status, setStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
@@ -48,14 +54,32 @@ export default function ContactSection() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    const subject = encodeURIComponent(`Contact from ${name}`);
-    const body = encodeURIComponent(
-      `Name: ${name}\nEmail: ${email}\n\nBrief:\n${brief}`
-    );
-    window.location.href = `mailto:${CONTACT.email}?subject=${subject}&body=${body}`;
+
+    try {
+      setIsSending(true);
+      setStatus(null);
+
+      const message = await submitContactForm({ name, email, brief });
+
+      setStatus({ type: "success", message });
+      setName("");
+      setEmail("");
+      setBrief("");
+      setErrors({});
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to send your message right now.",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -175,13 +199,31 @@ export default function ContactSection() {
                 </span>
               )}
             </label>
-            <button type="submit" className="contactSubmitBtn">
-              Send via mailto
+            <button
+              type="submit"
+              className="contactSubmitBtn"
+              disabled={isSending}
+            >
+              {isSending ? "Sending..." : "Send message"}
             </button>
-            <div className="hint" style={{ marginTop: 10 }}>
-              Demo form (no backend). Opens your email client with prefilled
-              content.
-            </div>
+            {status ? (
+              <div
+                className="hint"
+                style={{
+                  marginTop: 10,
+                  color:
+                    status.type === "success"
+                      ? "var(--accent)"
+                      : "var(--text-muted)",
+                }}
+              >
+                {status.message}
+              </div>
+            ) : (
+              <div className="hint" style={{ marginTop: 10 }}>
+                Sends directly through the Express contact API.
+              </div>
+            )}
           </form>
         </GlassCard>
       </div>
