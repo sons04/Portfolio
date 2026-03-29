@@ -21,4 +21,5 @@ Thumbs.db
 # env
 .env
 .env.*
+!portfolio/.env.example
 
