@@ -17,6 +17,7 @@ const EARTH_SPECULAR_URL =
 const EARTH_CLOUDS_URL =
   "/textures/earth-clouds.png";
 const DEFAULT_SUN_DIRECTION = new THREE.Vector3(4, 2.5, 3).normalize();
+type QualityTier = "low" | "mid" | "high";
 
 function getBrightnessBoost(dimAmount: number) {
   return 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
@@ -98,13 +99,18 @@ function makeFeatureLineGeometry(geojson: any, radius: number) {
 
 function RealisticEarth({
   sunDirection,
-  dimAmount
+  dimAmount,
+  quality
 }: {
   sunDirection: THREE.Vector3;
   dimAmount: number;
+  quality: QualityTier;
 }) {
   const { gl } = useThree();
   const brightnessBoost = getBrightnessBoost(dimAmount);
+  const earthSegments = quality === "high" ? 160 : quality === "mid" ? 128 : 96;
+  const detailSegments = quality === "high" ? 144 : quality === "mid" ? 112 : 80;
+  const cloudSegments = quality === "high" ? 72 : quality === "mid" ? 56 : 40;
 
   const [dayTex, normalTex, specularTex, nightTex, cloudsTex] = useLoader(THREE.TextureLoader, [
     EARTH_DAY_URL,
@@ -115,18 +121,19 @@ function RealisticEarth({
   ]) as THREE.Texture[];
 
   useEffect(() => {
-    const anisotropy = Math.min(12, gl.capabilities.getMaxAnisotropy());
+    const anisotropyCap = quality === "high" ? 12 : quality === "mid" ? 8 : 4;
+    const anisotropy = Math.min(anisotropyCap, gl.capabilities.getMaxAnisotropy());
     configureTexture(dayTex, anisotropy, THREE.SRGBColorSpace);
     configureTexture(normalTex, anisotropy);
     configureTexture(specularTex, anisotropy);
     configureTexture(nightTex, anisotropy, THREE.SRGBColorSpace);
     configureTexture(cloudsTex, anisotropy, THREE.SRGBColorSpace);
-  }, [cloudsTex, dayTex, gl, nightTex, normalTex, specularTex]);
+  }, [cloudsTex, dayTex, gl, nightTex, normalTex, quality, specularTex]);
 
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[1, 192, 192]} />
+        <sphereGeometry args={[1, earthSegments, earthSegments]} />
         <meshPhongMaterial
           map={dayTex}
           normalMap={normalTex}
@@ -141,21 +148,33 @@ function RealisticEarth({
         />
       </mesh>
       <MapOverlay sunDirection={sunDirection} dimAmount={dimAmount} />
-      <OceanHighlights specularTex={specularTex} sunDirection={sunDirection} />
-      <NightLights nightTex={nightTex} sunDirection={sunDirection} />
+      <OceanHighlights
+        specularTex={specularTex}
+        sunDirection={sunDirection}
+        segments={detailSegments}
+      />
+      <NightLights
+        nightTex={nightTex}
+        sunDirection={sunDirection}
+        segments={detailSegments}
+      />
       <CloudLayer
         cloudTex={cloudsTex}
         scale={1.012}
         opacity={0.08 + brightnessBoost * 0.04}
         speed={0.022}
+        segments={cloudSegments}
       />
-      <CloudLayer
-        cloudTex={cloudsTex}
-        scale={1.018}
-        opacity={0.035 + brightnessBoost * 0.02}
-        speed={0.014}
-      />
-      <Atmosphere sunDirection={sunDirection} />
+      {quality !== "low" ? (
+        <CloudLayer
+          cloudTex={cloudsTex}
+          scale={1.018}
+          opacity={0.035 + brightnessBoost * 0.02}
+          speed={0.014}
+          segments={cloudSegments}
+        />
+      ) : null}
+      <Atmosphere sunDirection={sunDirection} segments={cloudSegments} />
     </group>
   );
 }
@@ -175,7 +194,7 @@ function MapOverlay({
     );
     return makeFeatureLineGeometry(landGeo, 1.0045);
   }, []);
-  const daylight = sunDirection.clone().normalize().z;
+  const daylight = sunDirection.z;
   const landOpacity = 0.16 + brightnessBoost * 0.05 + Math.max(0, daylight) * 0.03;
 
   useEffect(() => {
@@ -199,18 +218,27 @@ function MapOverlay({
   );
 }
 
-function ProceduralEarthFallback({ dimAmount }: { dimAmount: number }) {
+function ProceduralEarthFallback({
+  dimAmount,
+  quality
+}: {
+  dimAmount: number;
+  quality: QualityTier;
+}) {
   const { gl } = useThree();
-  const { tex } = useMemo(() => makeProceduralTexture(1024), []);
+  const textureSize = quality === "high" ? 768 : quality === "mid" ? 640 : 512;
+  const sphereSegments = quality === "high" ? 112 : quality === "mid" ? 88 : 64;
+  const { tex } = useMemo(() => makeProceduralTexture(textureSize), [textureSize]);
   const brightnessBoost = getBrightnessBoost(dimAmount);
 
   useEffect(() => {
-    tex.anisotropy = Math.min(12, gl.capabilities.getMaxAnisotropy());
-  }, [gl, tex]);
+    const anisotropyCap = quality === "high" ? 12 : quality === "mid" ? 8 : 4;
+    tex.anisotropy = Math.min(anisotropyCap, gl.capabilities.getMaxAnisotropy());
+  }, [gl, quality, tex]);
 
   return (
     <mesh>
-      <sphereGeometry args={[1, 128, 128]} />
+      <sphereGeometry args={[1, sphereSegments, sphereSegments]} />
       <meshStandardMaterial
         map={tex}
         color={new THREE.Color().setScalar(1 + brightnessBoost * 0.08)}
@@ -225,10 +253,12 @@ function ProceduralEarthFallback({ dimAmount }: { dimAmount: number }) {
 
 function NightLights({
   nightTex,
-  sunDirection
+  sunDirection,
+  segments
 }: {
   nightTex: THREE.Texture;
   sunDirection: THREE.Vector3;
+  segments: number;
 }) {
   const material = useMemo(
     () =>
@@ -283,7 +313,7 @@ function NightLights({
 
   return (
     <mesh scale={1.001}>
-      <sphereGeometry args={[1, 128, 128]} />
+      <sphereGeometry args={[1, segments, segments]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
@@ -378,10 +408,12 @@ function makeProceduralTexture(size: number) {
 
 function OceanHighlights({
   specularTex,
-  sunDirection
+  sunDirection,
+  segments
 }: {
   specularTex: THREE.Texture;
   sunDirection: THREE.Vector3;
+  segments: number;
 }) {
   const material = useMemo(
     () =>
@@ -438,7 +470,7 @@ function OceanHighlights({
 
   return (
     <mesh scale={1.002}>
-      <sphereGeometry args={[1, 192, 192]} />
+      <sphereGeometry args={[1, segments, segments]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
@@ -448,12 +480,14 @@ function CloudLayer({
   cloudTex,
   scale,
   opacity,
-  speed
+  speed,
+  segments
 }: {
   cloudTex: THREE.Texture;
   scale: number;
   opacity: number;
   speed: number;
+  segments: number;
 }) {
   const ref = useRef<THREE.Mesh>(null);
 
@@ -464,7 +498,7 @@ function CloudLayer({
 
   return (
     <mesh ref={ref} scale={scale}>
-      <sphereGeometry args={[1, 96, 96]} />
+      <sphereGeometry args={[1, segments, segments]} />
       <meshStandardMaterial
         alphaMap={cloudTex}
         color="#dfefff"
@@ -478,7 +512,13 @@ function CloudLayer({
   );
 }
 
-function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
+function Atmosphere({
+  sunDirection,
+  segments
+}: {
+  sunDirection: THREE.Vector3;
+  segments: number;
+}) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -526,7 +566,7 @@ function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
 
   return (
     <mesh scale={1.06}>
-      <sphereGeometry args={[1, 96, 96]} />
+      <sphereGeometry args={[1, segments, segments]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
@@ -534,22 +574,31 @@ function Atmosphere({ sunDirection }: { sunDirection: THREE.Vector3 }) {
 
 function EarthBase({
   sunDirection,
-  dimAmount
+  dimAmount,
+  quality
 }: {
   sunDirection: THREE.Vector3;
   dimAmount: number;
+  quality: QualityTier;
 }) {
   return (
     <group>
       <Suspense
         fallback={
           <group>
-            <ProceduralEarthFallback dimAmount={dimAmount} />
-            <Atmosphere sunDirection={sunDirection} />
+            <ProceduralEarthFallback dimAmount={dimAmount} quality={quality} />
+            <Atmosphere
+              sunDirection={sunDirection}
+              segments={quality === "high" ? 72 : quality === "mid" ? 56 : 40}
+            />
           </group>
         }
       >
-        <RealisticEarth sunDirection={sunDirection} dimAmount={dimAmount} />
+        <RealisticEarth
+          sunDirection={sunDirection}
+          dimAmount={dimAmount}
+          quality={quality}
+        />
       </Suspense>
     </group>
   );
@@ -557,10 +606,18 @@ function EarthBase({
 
 export function EarthView({
   sunDirection = DEFAULT_SUN_DIRECTION,
-  dimAmount = 0.5
+  dimAmount = 0.5,
+  quality = "high"
 }: {
   sunDirection?: THREE.Vector3;
   dimAmount?: number;
+  quality?: QualityTier;
 }) {
-  return <EarthBase sunDirection={sunDirection} dimAmount={dimAmount} />;
+  return (
+    <EarthBase
+      sunDirection={sunDirection}
+      dimAmount={dimAmount}
+      quality={quality}
+    />
+  );
 }
