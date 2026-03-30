@@ -211,6 +211,7 @@ export default function ContactSection() {
                 className="hint"
                 style={{
                   marginTop: 10,
+                  whiteSpace: "pre-wrap",
                   color:
                     status.type === "success"
                       ? "var(--accent)"
