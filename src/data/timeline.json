@@ -2,9 +2,9 @@
   {
     "id": "ecobertura-cto",
     "stageTitle": "Scroll stage 1",
-    "heading": "CTO — Ecobertura",
-    "locationLabel": "Gran Canaria, Canary Islands",
-    "coordinates": { "lat": 28.1, "lon": -15.4 },
+    "heading": "CTO | Ecobertura",
+    "locationLabel": "Tenerife, Canary Islands",
+    "coordinates": { "lat": 28.4636, "lon": -16.2518 },
     "timeframe": "Mar 2023 – present",
     "sections": [
       {
@@ -30,7 +30,7 @@
   {
     "id": "w3-fansports-cto",
     "stageTitle": "Scroll stage 2",
-    "heading": "CTO — W3 FanSports",
+    "heading": "CTO | W3 FanSports",
     "locationLabel": "Tenerife, Spain",
     "coordinates": { "lat": 28.2916, "lon": -16.6291 },
     "sections": [
@@ -57,7 +57,7 @@
   {
     "id": "cyberproof-soc",
     "stageTitle": "Scroll stage 3",
-    "heading": "Cyber Security Analyst — CyberProof",
+    "heading": "Cyber Security Analyst | CyberProof",
     "locationLabel": "Barcelona, Spain",
     "coordinates": { "lat": 41.3851, "lon": 2.1734 },
     "sections": [
@@ -84,7 +84,7 @@
   {
     "id": "eu-plant-disease",
     "stageTitle": "Scroll stage 4",
-    "heading": "European Union Project — Plant Disease Recognition",
+    "heading": "European Union Project | Plant Disease Recognition",
     "locationLabel": "Europe (multinational collaboration)",
     "coordinates": { "lat": 50.0, "lon": 10.0 },
     "sections": [
@@ -106,7 +106,7 @@
   {
     "id": "entertainment-konnections",
     "stageTitle": "Scroll stage 5",
-    "heading": "Micro‑soldering Technician — Entertainment Konnections",
+    "heading": "Micro‑soldering Technician | Entertainment Konnections",
     "locationLabel": "Broome, Western Australia",
     "coordinates": { "lat": -17.9614, "lon": 122.2359 },
     "citations": [
@@ -139,7 +139,7 @@
   {
     "id": "waec-it-tech",
     "stageTitle": "Scroll stage 6",
-    "heading": "IT Technician — Western Australian Electoral Commission",
+    "heading": "IT Technician | Western Australian Electoral Commission",
     "locationLabel": "Perth, Western Australia",
     "coordinates": { "lat": -31.9523, "lon": 115.8613 },
     "citations": [
@@ -167,7 +167,7 @@
   {
     "id": "right-place-geospatial",
     "stageTitle": "Scroll stage 7",
-    "heading": "Cloud Architect — Right Place Geospatial (ABN 56 660 664 826)",
+    "heading": "Cloud Architect | Right Place Geospatial (ABN 56 660 664 826)",
     "locationLabel": "Western Australia (6163 region)",
     "coordinates": { "lat": -32.12, "lon": 115.85 },
     "citations": [

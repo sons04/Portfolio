@@ -110,8 +110,13 @@ function NetworkArcs({
     return new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uColor: { value: new THREE.Color(theme.colors.accent) },
-        uOpacity: { value: 0.30 }
+        uColor: {
+          value: new THREE.Color(theme.colors.accent).lerp(
+            new THREE.Color("#9fdcff"),
+            0.18
+          )
+        },
+        uOpacity: { value: 0.62 }
       },
       vertexShader: `
         attribute float aT;
@@ -408,6 +413,7 @@ function Scene({
   autoRotate,
   activeIndex,
   onSelectNode,
+  onExploreStart,
   onMarkerHover,
   persistActiveMarkerTooltip,
   isExplore,
@@ -419,6 +425,7 @@ function Scene({
   autoRotate: boolean;
   activeIndex: number;
   onSelectNode: (id: string) => void;
+  onExploreStart: () => void;
   onMarkerHover: (node: TimelineNode | null) => void;
   persistActiveMarkerTooltip: boolean;
   isExplore: boolean;
@@ -426,6 +433,15 @@ function Scene({
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const globeRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const handleStart = () => onExploreStart();
+    controls.addEventListener("start", handleStart);
+    return () => controls.removeEventListener("start", handleStart);
+  }, [onExploreStart]);
 
   const enablePost = quality !== "low";
   const enableSSAO = quality === "high" && !isExplore;
@@ -439,7 +455,7 @@ function Scene({
   const bloomIntensity = 0.06 + brightnessBoost * 0.08;
   const vignetteDarkness = 0.46 - brightnessBoost * 0.16;
 
-  const sunDir = useMemo(() => new THREE.Vector3(0.9, 0.5, 5.6).normalize(), []);
+  const sunDir = useMemo(() => new THREE.Vector3(-1.8, 1.05, 5.6).normalize(), []);
   const activeId = timelineNodes[activeIndex]?.id ?? timelineNodes[0].id;
   const markersMemo = useMemo(
     () => timelineNodes.map((n) => (
@@ -486,13 +502,14 @@ function Scene({
 
       <OrbitControls
         ref={controlsRef}
-        enabled={isExplore}
+        enabled
         rotateSpeed={0.65}
         target={[0, 0, 0]}
         minDistance={EXPLORE_MIN_DISTANCE}
         maxDistance={EXPLORE_MAX_DISTANCE}
         minPolarAngle={0.6}
         maxPolarAngle={2.4}
+        enableZoom={isExplore}
         enablePan={false}
         enableDamping
         dampingFactor={0.1}
@@ -574,11 +591,13 @@ export default function GlobeHero() {
   const activeIndexRef = useRef(0);
   activeIndexRef.current = activeIndex;
 
+  const stageMode = isPhoneViewport ? "explore" : "narrative";
+
   const goToStageIndex = useCallback((targetIndex: number) => {
     if (transitionLock) return;
     const clamped = clamp(targetIndex, 0, timelineNodes.length - 1);
     setActiveIndex(clamped);
-    setMode("explore");
+    setMode(stageMode);
     if (isPhoneViewport) {
       setCardVisible(false);
       return;
@@ -591,7 +610,7 @@ export default function GlobeHero() {
       setPanelFade(true);
       setTimeout(() => setTransitionLock(false), 250);
     }, 150);
-  }, [isPhoneViewport, transitionLock, setMode]);
+  }, [isPhoneViewport, stageMode, transitionLock, setMode]);
 
   const goToStage = useCallback((direction: 1 | -1) => {
     const target = clamp(
@@ -651,7 +670,7 @@ export default function GlobeHero() {
   useEffect(() => {
     // Cinematic rhythm: focus first, then fade card.
     setActiveIndex(0);
-    setMode("explore");
+    setMode(stageMode);
     if (isPhoneViewport) {
       setCardVisible(false);
       return;
@@ -659,7 +678,7 @@ export default function GlobeHero() {
 
     const t = window.setTimeout(() => setCardVisible(true), 420);
     return () => window.clearTimeout(t);
-  }, [isPhoneViewport, setMode]);
+  }, [isPhoneViewport, stageMode, setMode]);
 
   useEffect(() => {
     if (!isPhoneViewport) return;
@@ -695,6 +714,10 @@ export default function GlobeHero() {
   const brightnessBoost = 1 - GLOBE_DIM;
   const toneMappingExposure = 1.1 + brightnessBoost * 0.6;
   const globeOverlayOpacity = !isPhoneViewport && cardVisible ? GLOBE_DIM * 0.04 : 0;
+  const handleExploreStart = useCallback(() => {
+    if (isPhoneViewport || isExplore) return;
+    setMode("explore");
+  }, [isExplore, isPhoneViewport, setMode]);
   const handleSelectNode = useCallback((id: string) => {
     const idx = timelineNodes.findIndex((n) => n.id === id);
     if (idx >= 0) {
@@ -754,6 +777,7 @@ export default function GlobeHero() {
               autoRotate={autoRotate && !reducedMotion}
               activeIndex={activeIndex}
               onSelectNode={handleSelectNode}
+              onExploreStart={handleExploreStart}
               onMarkerHover={handleMarkerHover}
               persistActiveMarkerTooltip={isPhoneViewport}
               isExplore={isExplore}

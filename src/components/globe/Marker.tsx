@@ -41,7 +41,7 @@ function MarkerComponent({
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const hoverProgress = useRef(0);
-  const showTooltip = hovered || (persistActiveTooltip && isActive);
+  const showTooltip = persistActiveTooltip && isActive;
 
   const pos = useMemo(
     () =>

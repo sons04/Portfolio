@@ -110,10 +110,7 @@ export default function ProjectsCarousel() {
         Projects
       </div>
       <h2 className="sectionTitle">Selected work, summarised for scanning.</h2>
-      <p className="sectionSubtitle">
-        Each item focuses on outcomes, system boundaries, and the technologies
-        used. Expand for quantified metrics and details.
-      </p>
+      <p className="sectionSubtitle">Selected projects and delivery outcomes.</p>
 
       <div className="projectsGrid" role="list">
         {projects.map((p) => (

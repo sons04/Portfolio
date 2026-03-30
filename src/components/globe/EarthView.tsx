@@ -16,7 +16,7 @@ const EARTH_SPECULAR_URL =
   "/textures/earth-specular.jpg";
 const EARTH_CLOUDS_URL =
   "/textures/earth-clouds.png";
-const DEFAULT_SUN_DIRECTION = new THREE.Vector3(4, 2.5, 3).normalize();
+const DEFAULT_SUN_DIRECTION = new THREE.Vector3(-4.2, 3.3, 3).normalize();
 type QualityTier = "low" | "mid" | "high";
 
 function getBrightnessBoost(dimAmount: number) {

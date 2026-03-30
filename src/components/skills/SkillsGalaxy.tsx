@@ -12,7 +12,7 @@ type CapabilityGroup = {
 const highlightItems = [
   {
     label: "Core profile",
-    value: "CTO, cloud architect, frontend engineer, cyber analyst"
+    value: "Technical leadership across cloud, product, and security"
   },
   {
     label: "Strength areas",
@@ -20,7 +20,7 @@ const highlightItems = [
   },
   {
     label: "Context",
-    value: "Built across IoT, geospatial media, Web3, SOC operations, and repair labs"
+    value: "Experience across IoT, geospatial, Web3, SOC, and hardware repair"
   }
 ];
 
@@ -28,7 +28,7 @@ const capabilityGroups: CapabilityGroup[] = [
   {
     title: "Cloud architecture and platform delivery",
     summary:
-      "Designs AWS systems with repeatable infrastructure, security boundaries, and production-minded delivery.",
+      "Builds AWS platforms with repeatable infrastructure and production-ready delivery.",
     skills: ["AWS", "Terraform", "Lambda", "API Gateway", "CloudFront", "IAM", "MediaConvert"],
     evidence: [
       "Built AWS IoT infrastructure for agricultural operations.",
@@ -39,7 +39,7 @@ const capabilityGroups: CapabilityGroup[] = [
   {
     title: "Frontend and product engineering",
     summary:
-      "Builds recruiter-readable interfaces and product experiences with strong attention to structure, performance, and usability.",
+      "Builds clear interfaces and product experiences with strong structure and usability.",
     skills: ["React", "Angular", "TypeScript", "UI architecture", "Interaction design"],
     evidence: [
       "Shipped React interfaces for decentralised products and token-gated experiences.",
@@ -50,7 +50,7 @@ const capabilityGroups: CapabilityGroup[] = [
   {
     title: "Web3 and distributed systems",
     summary:
-      "Ships smart-contract backed experiences with practical attention to reliability, onboarding, and ecosystem constraints.",
+      "Delivers smart-contract products with practical attention to reliability and onboarding.",
     skills: ["Solidity", "Ethereum", "IPFS", "NFT membership", "Wallet-connected UX"],
     evidence: [
       "Developed smart-contract systems and NFT-based membership mechanisms.",
@@ -61,7 +61,7 @@ const capabilityGroups: CapabilityGroup[] = [
   {
     title: "Security, operations, and hardware",
     summary:
-      "Brings an evidence-driven security mindset shaped by SOC workflows, forensics, and component-level technical work.",
+      "Applies a security mindset shaped by SOC workflows, forensics, and component-level work.",
     skills: ["Threat hunting", "Digital forensics", "SIEM", "EDR", "Python scripting", "Hardware diagnostics"],
     evidence: [
       "Worked in enterprise SOC and incident-response environments.",
@@ -80,9 +80,7 @@ export default function SkillsGalaxy() {
       </div>
       <h2 className="sectionTitle">Clearer strengths, grouped for fast scanning.</h2>
       <p className="sectionSubtitle">
-        The portfolio now summarises capability areas directly instead of hiding
-        them inside a 3D visual. This makes the strongest skills easier to scan
-        for recruiters, hiring managers, and technical leads.
+        Core strengths grouped for quick review.
       </p>
 
       <div className="skillsOverviewHighlights" role="list">

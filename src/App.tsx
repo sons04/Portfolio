@@ -206,10 +206,9 @@ export function App() {
                 security-minded builder.
               </h1>
               <p className="subtitle">
-                Explore the globe to follow work across CTO leadership, cloud
-                architecture, cybersecurity, MicroPython systems, and
-                microsoldering services. Each stop is summarised for fast
-                recruiter scanning with outcomes, technologies, and context.
+                A concise portfolio of delivery work, technical leadership, and
+                hands-on engineering across cloud, security, embedded systems,
+                and repair.
               </p>
 
               <div className="pillRow" aria-label="Stack">
@@ -249,15 +248,15 @@ export function App() {
       </section>
 
       <main className="page">
-        <DeferredSection anchorId="skills" minHeight={540}>
-          <Suspense fallback={null}>
-            <SkillsGalaxy />
-          </Suspense>
-        </DeferredSection>
-
         <DeferredSection anchorId="projects" minHeight={620}>
           <Suspense fallback={null}>
             <ProjectsCarousel />
+          </Suspense>
+        </DeferredSection>
+
+        <DeferredSection anchorId="skills" minHeight={540}>
+          <Suspense fallback={null}>
+            <SkillsGalaxy />
           </Suspense>
         </DeferredSection>
 

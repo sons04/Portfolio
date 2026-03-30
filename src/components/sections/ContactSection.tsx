@@ -88,11 +88,8 @@ export default function ContactSection() {
         <span className="kickerDot" aria-hidden="true" />
         Contact
       </div>
-      <h2 className="sectionTitle">Let's discuss outcomes and constraints.</h2>
-      <p className="sectionSubtitle">
-        If you are hiring or scoping a project, send a short brief. I respond
-        best to clear context: constraints, timelines, and success criteria.
-      </p>
+      <h2 className="sectionTitle">Let's discuss your project.</h2>
+      <p className="sectionSubtitle">Send a short brief and I will reply by email.</p>
 
       <div className="contactGrid">
         <GlassCard variant="panel" className="contactCard">
@@ -133,9 +130,6 @@ export default function ContactSection() {
               </a>
               <CopyButton text={CONTACT.github} />
             </span>
-          </div>
-          <div className="contactNote">
-            LinkedIn, GitHub, and email are live.
           </div>
         </GlassCard>
 
@@ -186,7 +180,7 @@ export default function ContactSection() {
               <textarea
                 id="contact-brief"
                 name="brief"
-                placeholder="What are you building, what constraints matter, and what does success look like?"
+                placeholder="What are you building, and what help do you need?"
                 rows={5}
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
@@ -222,7 +216,7 @@ export default function ContactSection() {
               </div>
             ) : (
               <div className="hint" style={{ marginTop: 10 }}>
-                Sends directly through the Express contact API.
+                Include the project type, timeline, and main goal.
               </div>
             )}
           </form>
