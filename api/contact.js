@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Failed to send contact email.", error);
     return res.status(500).json({
-      message: "Unable to send your message right now. Please try again later.",
+      message: formatError(error),
     });
   }
 }
@@ -49,4 +49,16 @@ function readBody(body) {
   if (typeof body === "string") return JSON.parse(body);
   if (Buffer.isBuffer(body)) return JSON.parse(body.toString("utf8"));
   return body;
+}
+
+function formatError(error) {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return JSON.stringify(error, null, 2);
 }
