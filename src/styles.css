@@ -716,6 +716,11 @@ a {
     font-size: 0.95rem;
   }
 
+  .heroCard .title {
+    font-size: clamp(1.7rem, 7.4vw, 2.25rem);
+    line-height: 1.04;
+  }
+
   .copy {
     padding: 22px 18px;
   }
@@ -1832,6 +1837,11 @@ a {
 
   .title {
     font-size: clamp(28px, 10vw, 34px);
+  }
+
+  .heroCard .title {
+    font-size: clamp(1.5rem, 7.2vw, 1.9rem);
+    line-height: 1.03;
   }
 
   .sectionTitle {

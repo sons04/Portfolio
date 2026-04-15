@@ -514,7 +514,9 @@ function Scene({
     return () => controls.removeEventListener("start", handleStart);
   }, [onExploreStart]);
 
-  const enablePost = quality !== "low";
+  // Some mobile GPUs render square artifacts while dragging with post-processing enabled.
+  // Disabling the composer in explore mode keeps interaction stable on phones.
+  const enablePost = quality !== "low" && !isExplore;
   const enableSSAO = quality === "high" && !isExplore;
   const enableSMAA = quality === "high" && !isExplore;
   const bloomMipMapBlur = quality === "high" && !isExplore;
