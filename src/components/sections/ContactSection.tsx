@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { GlassCard } from "../../ui/GlassCard";
 import { IconButton } from "../../ui/IconButton";
 import { submitContactForm } from "../../lib/contactApi";
+import { Fade } from "../../ui/Fade";
 
 const CONTACT = {
   email: "work.sergioacosta@gmail.com",
@@ -45,11 +46,11 @@ export default function ContactSection() {
 
   const validate = () => {
     const next: typeof errors = {};
-    if (!name.trim()) next.name = "Name is required";
-    if (!email.trim()) next.email = "Email is required";
+    if (!name.trim()) next.name = "Please enter your name";
+    if (!email.trim()) next.email = "Please enter your email";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      next.email = "Invalid email";
-    if (!brief.trim()) next.brief = "Brief is required";
+      next.email = "Please enter a valid email";
+    if (!brief.trim()) next.brief = "Please add a short message";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -84,143 +85,156 @@ export default function ContactSection() {
 
   return (
     <section id="contact" className="section" aria-label="Contact">
-      <div className="kicker">
-        <span className="kickerDot" aria-hidden="true" />
-        Contact
-      </div>
-      <h2 className="sectionTitle">Let's discuss your project.</h2>
-      <p className="sectionSubtitle">Send a short brief and I will reply by email.</p>
+      <Fade triggerOnView>
+        <div className="kicker">
+          <span className="kickerDot" aria-hidden="true" />
+          Contact
+        </div>
+      </Fade>
+      <Fade triggerOnView className="fade--delay-1">
+        <h2 className="sectionTitle">Let&apos;s talk about your project.</h2>
+      </Fade>
+      <Fade triggerOnView className="fade--delay-2">
+        <p className="sectionSubtitle">Available for freelance, contract, and project-based work through an Australian ABN. Send a short note to start the conversation.</p>
+      </Fade>
 
       <div className="contactGrid">
-        <GlassCard variant="panel" className="contactCard">
-          <div className="contactTitle">Direct</div>
-          <div className="contactRow">
-            <span className="contactLabel">Email</span>
-            <span className="contactRowRight">
-              <a className="contactLink" href={`mailto:${CONTACT.email}`}>
-                {CONTACT.email}
-              </a>
-              <CopyButton text={CONTACT.email} />
-            </span>
-          </div>
-          <div className="contactRow">
-            <span className="contactLabel">LinkedIn</span>
-            <span className="contactRowRight">
-              <a
-                className="contactLink"
-                href={CONTACT.linkedIn}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Profile link
-              </a>
-              <CopyButton text={CONTACT.linkedIn} />
-            </span>
-          </div>
-          <div className="contactRow">
-            <span className="contactLabel">GitHub</span>
-            <span className="contactRowRight">
-              <a
-                className="contactLink"
-                href={CONTACT.github}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Profile link
-              </a>
-              <CopyButton text={CONTACT.github} />
-            </span>
-          </div>
-        </GlassCard>
+        <Fade triggerOnView className="fade--delay-1 fade--slide-sm">
+          <GlassCard variant="panel" className="contactCard">
+            <div className="contactTitle">Get in touch</div>
+            <div className="hint" style={{ marginBottom: 16 }}>
+              Available to hire through an Australian ABN.
+            </div>
+            <div className="contactRow">
+              <span className="contactLabel">Email</span>
+              <span className="contactRowRight">
+                <a className="contactLink" href={`mailto:${CONTACT.email}`}>
+                  {CONTACT.email}
+                </a>
+                <CopyButton text={CONTACT.email} />
+              </span>
+            </div>
+            <div className="contactRow">
+              <span className="contactLabel">LinkedIn</span>
+              <span className="contactRowRight">
+                <a
+                  className="contactLink"
+                  href={CONTACT.linkedIn}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Profile link
+                </a>
+                <CopyButton text={CONTACT.linkedIn} />
+              </span>
+            </div>
+            <div className="contactRow">
+              <span className="contactLabel">GitHub</span>
+              <span className="contactRowRight">
+                <a
+                  className="contactLink"
+                  href={CONTACT.github}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Profile link
+                </a>
+                <CopyButton text={CONTACT.github} />
+              </span>
+            </div>
+          </GlassCard>
+        </Fade>
 
-        <GlassCard variant="panel" as="div" className="contactFormCard">
-          <form
-            onSubmit={handleSubmit}
-            aria-label="Contact form"
-            className="contactForm"
-          >
-            <div className="contactTitle">Message</div>
-            <label className="field">
-              <span>Name</span>
-              <input
-                id="contact-name"
-                name="name"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                aria-invalid={!!errors.name}
-                aria-describedby={errors.name ? "err-name" : undefined}
-              />
-              {errors.name && (
-                <span id="err-name" className="fieldError">
-                  {errors.name}
-                </span>
-              )}
-            </label>
-            <label className="field">
-              <span>Email</span>
-              <input
-                id="contact-email"
-                name="email"
-                type="email"
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "err-email" : undefined}
-              />
-              {errors.email && (
-                <span id="err-email" className="fieldError">
-                  {errors.email}
-                </span>
-              )}
-            </label>
-            <label className="field">
-              <span>Brief</span>
-              <textarea
-                id="contact-brief"
-                name="brief"
-                placeholder="What are you building, and what help do you need?"
-                rows={5}
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                aria-invalid={!!errors.brief}
-                aria-describedby={errors.brief ? "err-brief" : undefined}
-              />
-              {errors.brief && (
-                <span id="err-brief" className="fieldError">
-                  {errors.brief}
-                </span>
-              )}
-            </label>
-            <button
-              type="submit"
-              className="contactSubmitBtn"
-              disabled={isSending}
+        <Fade triggerOnView className="fade--delay-2 fade--slide-sm">
+          <GlassCard variant="panel" as="div" className="contactFormCard">
+            <form
+              onSubmit={handleSubmit}
+              aria-label="Contact form"
+              className="contactForm"
             >
-              {isSending ? "Sending..." : "Send message"}
-            </button>
-            {status ? (
-              <div
-                className="hint"
-                style={{
-                  marginTop: 10,
-                  whiteSpace: "pre-wrap",
-                  color:
-                    status.type === "success"
-                      ? "var(--accent)"
-                      : "var(--text-muted)",
-                }}
+              <div className="contactTitle">Send a message</div>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  id="contact-name"
+                  name="name"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? "err-name" : undefined}
+                />
+                {errors.name && (
+                  <span id="err-name" className="fieldError">
+                    {errors.name}
+                  </span>
+                )}
+              </label>
+              <label className="field">
+                <span>Email</span>
+                <input
+                  id="contact-email"
+                  name="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? "err-email" : undefined}
+                />
+                {errors.email && (
+                  <span id="err-email" className="fieldError">
+                    {errors.email}
+                  </span>
+                )}
+              </label>
+              <label className="field">
+                <span>Brief</span>
+                <textarea
+                  id="contact-brief"
+                  name="brief"
+                  placeholder="A few lines about the project, timeline, or where you need help."
+                  rows={5}
+                  value={brief}
+                  onChange={(e) => setBrief(e.target.value)}
+                  aria-invalid={!!errors.brief}
+                  aria-describedby={errors.brief ? "err-brief" : undefined}
+                />
+                {errors.brief && (
+                  <span id="err-brief" className="fieldError">
+                    {errors.brief}
+                  </span>
+                )}
+              </label>
+              <button
+                type="submit"
+                className="contactSubmitBtn"
+                disabled={isSending}
               >
-                {status.message}
-              </div>
-            ) : (
-              <div className="hint" style={{ marginTop: 10 }}>
-                Include the project type, timeline, and main goal.
-              </div>
-            )}
-          </form>
-        </GlassCard>
+                {isSending ? "Sending..." : "Send message"}
+              </button>
+              {status ? (
+                <div
+                  className="hint"
+                  style={{
+                    marginTop: 10,
+                    whiteSpace: "pre-wrap",
+                    color:
+                      status.type === "success"
+                        ? "var(--accent)"
+                        : "var(--text-muted)",
+                  }}
+                >
+                  {status.message}
+                </div>
+              ) : (
+                <div className="hint" style={{ marginTop: 10 }}>
+                  Helpful context: project type, timeline, scope, and preferred engagement.
+                </div>
+              )}
+            </form>
+          </GlassCard>
+        </Fade>
       </div>
     </section>
   );

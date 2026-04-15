@@ -1,21 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 
 const Navbar = () => {
   const [nav, setNav] = useState(false);
   const [showNav, setShowNav] = useState(true);
-  let lastScrollY = window.scrollY;
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > lastScrollY) {
-        setShowNav(false); // scroll down → hide nav
+      const currentScrollY = window.scrollY;
+
+      if (currentScrollY <= 20) {
+        setShowNav(true);
+      } else if (currentScrollY > lastScrollY.current) {
+        setShowNav(false);
       } else {
-        setShowNav(true);  // scroll up → show nav
+        setShowNav(true);
       }
-      lastScrollY = window.scrollY;
+
+      lastScrollY.current = currentScrollY;
     };
 
+    lastScrollY.current = window.scrollY;
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);

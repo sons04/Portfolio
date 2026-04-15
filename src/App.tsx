@@ -91,26 +91,39 @@ export function App() {
   const closeMobileNav = () => setMobileNavOpen(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      const delta = currentScrollY - lastScrollYRef.current;
+    const getScrollY = () =>
+      Math.max(
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+        0
+      );
 
-      if (currentScrollY < 24) {
+    const updateNavVisibility = () => {
+      const currentScrollY = getScrollY();
+      const delta = currentScrollY - lastScrollYRef.current;
+      const movement = Math.abs(delta);
+
+      if (mobileNavOpen) {
         setNavHidden(false);
-      } else if (delta > 8) {
+      } else if (currentScrollY < 48) {
+        setNavHidden(false);
+      } else if (movement >= 1 && delta > 0 && currentScrollY > 120) {
         setNavHidden(true);
-      } else if (delta < -8) {
+      } else if (movement >= 1 && delta < 0) {
         setNavHidden(false);
       }
 
       lastScrollYRef.current = currentScrollY;
     };
 
-    lastScrollYRef.current = window.scrollY;
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    lastScrollYRef.current = getScrollY();
+    const interval = window.setInterval(updateNavVisibility, 50);
 
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -148,7 +161,13 @@ export function App() {
 
   return (
     <div className="appShell">
-      <header className={`siteNavWrap ${navHidden ? "siteNavWrapHidden" : ""}`}>
+      <header
+        className={`siteNavWrap ${navHidden ? "siteNavWrapHidden" : ""}`}
+        style={{
+          transform: navHidden ? "translateY(calc(-100% - 24px))" : "translateY(0)",
+          opacity: navHidden ? 0 : 1
+        }}
+      >
         <nav className={`siteNav ${mobileNavOpen ? "siteNavOpen" : ""}`} aria-label="Primary">
           <a className="siteBrand" href="#hero" onClick={closeMobileNav}>
             <span className="siteBrandDot" aria-hidden="true" />
@@ -202,13 +221,14 @@ export function App() {
           <GlassCard variant="hero" className="heroCard">
             <div className="copy">
               <h1 className="title">
-                Cloud architect, technical leader, microsoldering specialist, and
-                security-minded builder.
+                Cloud architect, technical leader, and hands-on builder across
+                software, security, and hardware.
               </h1>
               <p className="subtitle">
-                A concise portfolio of delivery work, technical leadership, and
-                hands-on engineering across cloud, security, embedded systems,
-                and repair.
+                Portfolio covering cloud infrastructure, frontend delivery,
+                cybersecurity, embedded systems, and board-level repair.
+                Available for freelance and contract work through an Australian
+                ABN.
               </p>
 
               <div className="pillRow" aria-label="Stack">
@@ -231,19 +251,19 @@ export function App() {
                 <div className="globeFallback">
                   <div>
                     <p style={{ margin: 0, fontWeight: 600 }}>
-                      Loading 3D globe…
+                      Loading interactive globe...
                     </p>
                     <p style={{ margin: "10px 0 0" }}>
-                      The globe loads as a separate chunk to keep the initial
-                      page responsive.
+                      It loads separately so the rest of the page stays fast.
                     </p>
                   </div>
                 </div>
               }
             >
-              <GlobeHero />
+              <GlobeHero mobileCardHostId="globe-mobile-card-host" />
             </Suspense>
           </div>
+          <div id="globe-mobile-card-host" className="globeMobileCardHost" />
         </div>
       </section>
 

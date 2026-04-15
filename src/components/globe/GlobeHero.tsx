@@ -1,4 +1,5 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
@@ -406,6 +407,74 @@ function ExploreCenterRig({
   return null;
 }
 
+function MobileSelectionFocusRig({
+  activeIndex,
+  controlsRef,
+  globeRef,
+  enabled
+}: {
+  activeIndex: number;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+  globeRef: React.RefObject<THREE.Group | null>;
+  enabled: boolean;
+}) {
+  const { camera } = useThree();
+  const flyStartRef = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const flyProgressRef = useRef(1);
+  const prevIndexRef = useRef(activeIndex);
+  const desiredPos = useMemo(() => new THREE.Vector3(), []);
+  const desiredTarget = useMemo(() => new THREE.Vector3(0, 0, 0), []);
+  const localFocus = useMemo(() => new THREE.Vector3(), []);
+
+  useEffect(() => {
+    if (!enabled) {
+      prevIndexRef.current = activeIndex;
+      flyStartRef.current = null;
+      flyProgressRef.current = 1;
+      return;
+    }
+
+    if (activeIndex !== prevIndexRef.current) {
+      flyStartRef.current = {
+        pos: camera.position.clone(),
+        target: controlsRef.current?.target?.clone() ?? new THREE.Vector3(0, 0, 0)
+      };
+      flyProgressRef.current = 0;
+      prevIndexRef.current = activeIndex;
+    }
+  }, [activeIndex, camera.position, controlsRef, enabled]);
+
+  useFrame((_state, dt) => {
+    if (!enabled || !globeRef.current || !controlsRef.current) return;
+    if (!flyStartRef.current || flyProgressRef.current >= 1) return;
+
+    const node = timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)];
+    latLonToVector3(
+      node.coordinates.lat,
+      node.coordinates.lon,
+      EXPLORE_DEFAULT_DISTANCE,
+      localFocus
+    );
+    desiredPos.copy(localFocus);
+    globeRef.current.localToWorld(desiredPos);
+
+    flyProgressRef.current = Math.min(1, flyProgressRef.current + dt / FLY_DURATION);
+    const t = easeInOutCubic(flyProgressRef.current);
+
+    camera.position.lerpVectors(flyStartRef.current.pos, desiredPos, t);
+    controlsRef.current.target.lerpVectors(flyStartRef.current.target, desiredTarget, t);
+    controlsRef.current.update();
+
+    if (flyProgressRef.current >= 1) {
+      controlsRef.current.target.copy(desiredTarget);
+      controlsRef.current.update();
+      flyStartRef.current = null;
+    }
+  });
+
+  return null;
+}
+
 function Scene({
   quality,
   dimAmount,
@@ -417,6 +486,7 @@ function Scene({
   onMarkerHover,
   persistActiveMarkerTooltip,
   isExplore,
+  isPhoneViewport,
   mouseParallaxRef
 }: {
   quality: QualityTier;
@@ -429,6 +499,7 @@ function Scene({
   onMarkerHover: (node: TimelineNode | null) => void;
   persistActiveMarkerTooltip: boolean;
   isExplore: boolean;
+  isPhoneViewport: boolean;
   mouseParallaxRef: React.MutableRefObject<MouseParallax>;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -515,6 +586,12 @@ function Scene({
         dampingFactor={0.1}
       />
       <ExploreCenterRig active={isExplore} controlsRef={controlsRef} />
+      <MobileSelectionFocusRig
+        activeIndex={activeIndex}
+        controlsRef={controlsRef}
+        globeRef={globeRef}
+        enabled={isExplore && isPhoneViewport}
+      />
       {!isExplore && (
         <CameraTimelineRig
           nodes={timelineNodes}
@@ -573,7 +650,11 @@ function RotatingGlobe({
   return <group ref={ref}>{children}</group>;
 }
 
-export default function GlobeHero() {
+export default function GlobeHero({
+  mobileCardHostId
+}: {
+  mobileCardHostId?: string;
+}) {
   const reducedMotion = usePrefersReducedMotion();
   const isPhoneViewport = useIsPhoneViewport();
   const { isExplore, setMode } = useExploreMode();
@@ -585,6 +666,7 @@ export default function GlobeHero() {
   const [cardVisible, setCardVisible] = useState(false);
   const [panelFade, setPanelFade] = useState(true);
   const [transitionLock, setTransitionLock] = useState(false);
+  const [mobileCardHost, setMobileCardHost] = useState<HTMLElement | null>(null);
   const wheelAccumRef = useRef(0);
   const mouseParallaxRef = useRef<MouseParallax>({ x: 0, y: 0 });
 
@@ -599,7 +681,7 @@ export default function GlobeHero() {
     setActiveIndex(clamped);
     setMode(stageMode);
     if (isPhoneViewport) {
-      setCardVisible(false);
+      setCardVisible(true);
       return;
     }
 
@@ -692,6 +774,15 @@ export default function GlobeHero() {
     mouseParallaxRef.current.y = 0;
   }, [isExplore]);
 
+  useEffect(() => {
+    if (!mobileCardHostId || typeof document === "undefined") {
+      setMobileCardHost(null);
+      return;
+    }
+
+    setMobileCardHost(document.getElementById(mobileCardHostId));
+  }, [mobileCardHostId]);
+
   const handleDocumentHidden = useCallback(() => {
     setPaused(true);
   }, []);
@@ -724,17 +815,17 @@ export default function GlobeHero() {
       goToStageIndex(idx);
     }
   }, [goToStageIndex]);
+  const activeNode = timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)];
 
   if (!supported) {
     return (
       <div className="globeFallback">
         <div>
           <p style={{ margin: 0, fontWeight: 600 }}>
-            WebGL isn’t available on this device.
+            This device can&apos;t render the live globe.
           </p>
           <p style={{ margin: "10px 0 0" }}>
-            You’re seeing a static fallback. The live globe uses hardware
-            accelerated graphics.
+            You&apos;re seeing a simpler fallback instead.
           </p>
         </div>
       </div>
@@ -742,78 +833,93 @@ export default function GlobeHero() {
   }
 
   return (
-    <>
-      <div
-        className={`globeStage ${isExplore ? "globeStageExplore" : ""}`}
-        aria-label="Interactive 3D globe"
-        onWheel={handleWheel}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{ touchAction: isExplore ? "none" : "pan-y" }}
-      >
-        <Canvas
-          className="globeCanvas"
-          camera={{ position: [0, 2.1, 6.2], fov: 45, near: 0.18, far: 50 }}
-          dpr={dpr}
-          gl={{
-            antialias: quality !== "low",
-            powerPreference: "high-performance",
-            outputColorSpace: THREE.SRGBColorSpace,
-            toneMapping: THREE.ACESFilmicToneMapping,
-            toneMappingExposure
-          }}
-          onCreated={({ gl }) => {
-            THREE.ColorManagement.enabled = true;
-            gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = toneMappingExposure;
-          }}
-        >
-          <Suspense fallback={null}>
-            <Scene
-              quality={quality}
-              dimAmount={GLOBE_DIM}
-              paused={paused}
-              autoRotate={autoRotate && !reducedMotion}
-              activeIndex={activeIndex}
-              onSelectNode={handleSelectNode}
-              onExploreStart={handleExploreStart}
-              onMarkerHover={handleMarkerHover}
-              persistActiveMarkerTooltip={isPhoneViewport}
-              isExplore={isExplore}
-              mouseParallaxRef={mouseParallaxRef}
-            />
-          </Suspense>
-        </Canvas>
-
-        {/* Dim the globe behind the narrative card */}
+    <div className={`globeHeroShell ${isPhoneViewport ? "globeHeroShell--mobile" : ""}`}>
+      <div className="globeStageFrame">
         <div
-          className="globeDim"
-          aria-hidden="true"
-          style={{ background: `rgba(4, 8, 22, ${globeOverlayOpacity})` }}
-        />
+          className={`globeStage ${isExplore ? "globeStageExplore" : ""}`}
+          aria-label="Interactive 3D globe"
+          onWheel={handleWheel}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{ touchAction: isExplore ? "none" : "pan-y" }}
+        >
+          <Canvas
+            className="globeCanvas"
+            camera={{ position: [0, 2.1, 6.2], fov: 45, near: 0.18, far: 50 }}
+            dpr={dpr}
+            gl={{
+              antialias: quality !== "low",
+              powerPreference: "high-performance",
+              outputColorSpace: THREE.SRGBColorSpace,
+              toneMapping: THREE.ACESFilmicToneMapping,
+              toneMappingExposure
+            }}
+            onCreated={({ gl }) => {
+              THREE.ColorManagement.enabled = true;
+              gl.outputColorSpace = THREE.SRGBColorSpace;
+              gl.toneMapping = THREE.ACESFilmicToneMapping;
+              gl.toneMappingExposure = toneMappingExposure;
+            }}
+          >
+            <Suspense fallback={null}>
+              <Scene
+                quality={quality}
+                dimAmount={GLOBE_DIM}
+                paused={paused}
+                autoRotate={autoRotate && !reducedMotion}
+                activeIndex={activeIndex}
+                onSelectNode={handleSelectNode}
+                onExploreStart={handleExploreStart}
+                onMarkerHover={handleMarkerHover}
+                persistActiveMarkerTooltip={false}
+                isExplore={isExplore}
+                isPhoneViewport={isPhoneViewport}
+                mouseParallaxRef={mouseParallaxRef}
+              />
+            </Suspense>
+          </Canvas>
 
-        {!isPhoneViewport && (
-          <ExperienceCard
-            visible={cardVisible}
-            fadeActive={panelFade}
-            node={timelineNodes[clamp(activeIndex, 0, timelineNodes.length - 1)]}
-            onClose={() => setCardVisible(false)}
-            onPrev={() => goToStage(-1)}
-            onNext={() => goToStage(1)}
+          {/* Dim the globe behind the narrative card */}
+          <div
+            className="globeDim"
+            aria-hidden="true"
+            style={{ background: `rgba(4, 8, 22, ${globeOverlayOpacity})` }}
           />
-        )}
 
-        <div
-          className={`globeExploreHint ${isExplore ? "globeExploreHint--visible" : ""}`}
-          aria-live="polite"
-        >
-          {isPhoneViewport
-            ? "Drag the globe and tap markers to view each role."
-            : "Drag to explore. Click markers to focus."}
+          {!isPhoneViewport && (
+            <ExperienceCard
+              visible={cardVisible}
+              fadeActive={panelFade}
+              node={activeNode}
+              onClose={() => setCardVisible(false)}
+              onPrev={() => goToStage(-1)}
+              onNext={() => goToStage(1)}
+            />
+          )}
+
+          <div
+            className={`globeExploreHint ${isExplore ? "globeExploreHint--visible" : ""}`}
+            aria-live="polite"
+          >
+            {isPhoneViewport
+              ? "Drag the globe and tap markers to view each role."
+              : "Drag to explore, then click a marker for details."}
+          </div>
         </div>
       </div>
-    </>
+      {isPhoneViewport && cardVisible && mobileCardHost && createPortal(
+        <ExperienceCard
+          visible
+          fadeActive={panelFade}
+          node={activeNode}
+          onClose={() => setCardVisible(false)}
+          onPrev={() => goToStage(-1)}
+          onNext={() => goToStage(1)}
+          mobile
+        />,
+        mobileCardHost
+      )}
+    </div>
   );
 }
 
@@ -823,7 +929,8 @@ function ExperienceCard({
   node,
   onClose,
   onPrev,
-  onNext
+  onNext,
+  mobile = false
 }: {
   visible: boolean;
   fadeActive: boolean;
@@ -831,94 +938,99 @@ function ExperienceCard({
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  mobile?: boolean;
 }) {
-  return (
-    <div className={visible ? "glassWrap glassWrapOn" : "glassWrap"} role="region">
-      <Fade key={node.id} active={fadeActive} className="glassCardWrap">
-      <div className="glassCard" aria-label="Experience card">
-        <div className="glassTop">
-          <div className="glassKicker">{node.locationLabel}</div>
-          <div className="glassTitleRow">
-            <h3 className="glassTitle">{node.heading}</h3>
-            {node.timeframe ? <span className="glassMeta">{node.timeframe}</span> : null}
-          </div>
-        </div>
+  const wrapClassName = mobile
+    ? "glassWrap glassWrapMobile glassWrapOn"
+    : visible ? "glassWrap glassWrapOn" : "glassWrap";
 
-        <div className="glassBody">
-          {node.sections.map((s) => {
-            if (s.type === "text") {
+  return (
+    <div className={wrapClassName} role="region">
+      <Fade key={node.id} active={fadeActive} className="glassCardWrap">
+        <div className="glassCard" aria-label="Experience card">
+          <div className="glassTop">
+            <div className="glassKicker">{node.locationLabel}</div>
+            <div className="glassTitleRow">
+              <h3 className="glassTitle">{node.heading}</h3>
+              {node.timeframe ? <span className="glassMeta">{node.timeframe}</span> : null}
+            </div>
+          </div>
+
+          <div className="glassBody">
+            {node.sections.map((s) => {
+              if (s.type === "text") {
+                return (
+                  <div key={s.title} className="glassSection">
+                    <div className="glassSectionTitle">{s.title}</div>
+                    <div className="glassText">{s.text}</div>
+                  </div>
+                );
+              }
               return (
                 <div key={s.title} className="glassSection">
                   <div className="glassSectionTitle">{s.title}</div>
-                  <div className="glassText">{s.text}</div>
+                  <ul className="glassList">
+                    {s.items.map((it) => (
+                      <li key={it}>{it}</li>
+                    ))}
+                  </ul>
                 </div>
               );
-            }
-            return (
-              <div key={s.title} className="glassSection">
-                <div className="glassSectionTitle">{s.title}</div>
-                <ul className="glassList">
-                  {s.items.map((it) => (
-                    <li key={it}>{it}</li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
+            })}
+          </div>
 
-        <div className="glassFooter">
-          <div className="glassNav">
-            <button type="button" className="glassBtn" onClick={onPrev} aria-label="Previous">
+          <div className="glassFooter">
+            <div className="glassNav">
+              <button type="button" className="glassBtn" onClick={onPrev} aria-label="Previous">
+                <svg
+                  className="glassBtnIcon"
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <path
+                    d="M9.5 3.5L5.5 8l4 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <button type="button" className="glassBtn" onClick={onNext} aria-label="Next">
+                <svg
+                  className="glassBtnIcon"
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <path
+                    d="M6.5 3.5L10.5 8l-4 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <button type="button" className="glassBtn" onClick={onClose} aria-label="Close">
               <svg
-                className="glassBtnIcon"
+                className="glassBtnIcon glassBtnIconClose"
                 aria-hidden="true"
                 viewBox="0 0 16 16"
                 fill="none"
               >
                 <path
-                  d="M9.5 3.5L5.5 8l4 4.5"
+                  d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="1.6"
                   strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <button type="button" className="glassBtn" onClick={onNext} aria-label="Next">
-              <svg
-                className="glassBtnIcon"
-                aria-hidden="true"
-                viewBox="0 0 16 16"
-                fill="none"
-              >
-                <path
-                  d="M6.5 3.5L10.5 8l-4 4.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
                 />
               </svg>
             </button>
           </div>
-          <button type="button" className="glassBtn" onClick={onClose} aria-label="Close">
-            <svg
-              className="glassBtnIcon glassBtnIconClose"
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <path
-                d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
         </div>
-      </div>
       </Fade>
     </div>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { GlassCard } from "../../ui/GlassCard";
 import { Pill } from "../../ui/Pill";
+import { Fade } from "../../ui/Fade";
 
 type CapabilityGroup = {
   title: string;
@@ -74,55 +75,71 @@ const capabilityGroups: CapabilityGroup[] = [
 export default function SkillsGalaxy() {
   return (
     <section id="skills" className="section skillsOverview" aria-label="Capabilities">
-      <div className="kicker">
-        <span className="kickerDot" aria-hidden="true" />
-        Capabilities
-      </div>
-      <h2 className="sectionTitle">Clearer strengths, grouped for fast scanning.</h2>
-      <p className="sectionSubtitle">
-        Core strengths grouped for quick review.
-      </p>
+      <Fade triggerOnView>
+        <div className="kicker">
+          <span className="kickerDot" aria-hidden="true" />
+          Capabilities
+        </div>
+      </Fade>
+      <Fade triggerOnView className="fade--delay-1">
+        <h2 className="sectionTitle">Clearer strengths, grouped for fast scanning.</h2>
+      </Fade>
+      <Fade triggerOnView className="fade--delay-2">
+        <p className="sectionSubtitle">
+          Core strengths grouped for quick review.
+        </p>
+      </Fade>
 
       <div className="skillsOverviewHighlights" role="list">
-        {highlightItems.map((item) => (
-          <GlassCard
+        {highlightItems.map((item, index) => (
+          <Fade
             key={item.label}
-            variant="panel"
-            as="article"
-            className="skillsOverviewHighlight"
+            triggerOnView
+            className={`fade--delay-${Math.min(index + 1, 4)} fade--slide-sm`}
           >
-            <div className="skillsOverviewLabel">{item.label}</div>
-            <div className="skillsOverviewValue">{item.value}</div>
-          </GlassCard>
+            <GlassCard
+              variant="panel"
+              as="article"
+              className="skillsOverviewHighlight"
+            >
+              <div className="skillsOverviewLabel">{item.label}</div>
+              <div className="skillsOverviewValue">{item.value}</div>
+            </GlassCard>
+          </Fade>
         ))}
       </div>
 
       <div className="skillsOverviewGrid" role="list">
-        {capabilityGroups.map((group) => (
-          <GlassCard
+        {capabilityGroups.map((group, index) => (
+          <Fade
             key={group.title}
-            variant="panel"
-            as="article"
-            className="skillsOverviewCard"
+            triggerOnView
+            className={`fade--delay-${Math.min((index % 4) + 1, 4)} fade--slide-sm`}
           >
-            <div className="skillsOverviewCardTitle">{group.title}</div>
-            <p className="skillsOverviewCardSummary">{group.summary}</p>
+            <GlassCard
+              variant="panel"
+              as="article"
+              className="skillsOverviewCard"
+            >
+              <div className="skillsOverviewCardTitle">{group.title}</div>
+              <p className="skillsOverviewCardSummary">{group.summary}</p>
 
-            <div className="skillsOverviewPills" aria-label={`${group.title} skills`}>
-              {group.skills.map((skill) => (
-                <Pill key={skill} size="sm">
-                  {skill}
-                </Pill>
-              ))}
-            </div>
+              <div className="skillsOverviewPills" aria-label={`${group.title} skills`}>
+                {group.skills.map((skill) => (
+                  <Pill key={skill} size="sm">
+                    {skill}
+                  </Pill>
+                ))}
+              </div>
 
-            <div className="skillsOverviewEvidenceTitle">Evidence</div>
-            <ul className="skillsOverviewEvidence">
-              {group.evidence.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </GlassCard>
+              <div className="skillsOverviewEvidenceTitle">Evidence</div>
+              <ul className="skillsOverviewEvidence">
+                {group.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </GlassCard>
+          </Fade>
         ))}
       </div>
     </section>
