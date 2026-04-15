@@ -514,17 +514,19 @@ function Scene({
     return () => controls.removeEventListener("start", handleStart);
   }, [onExploreStart]);
 
-  // Some mobile GPUs render square artifacts while dragging with post-processing enabled.
-  // Disabling the composer in explore mode keeps interaction stable on phones.
-  const enablePost = quality !== "low" && !isExplore;
-  const enableSSAO = quality === "high" && !isExplore;
-  const enableSMAA = quality === "high" && !isExplore;
-  const bloomMipMapBlur = quality === "high" && !isExplore;
+  // Keep the post-processing stack active while exploring so the globe
+  // maintains a consistent look after interaction starts.
+  const isMobileExplore = isPhoneViewport && isExplore;
+  const enablePost = quality !== "low";
+  const enableSSAO = quality === "high" && !isMobileExplore;
+  const enableSMAA = quality === "high" && !isMobileExplore;
+  const bloomMipMapBlur = quality === "high" && !isMobileExplore;
+  const mobileExploreLightScale = isPhoneViewport && isExplore ? 0.84 : 1;
   const brightnessBoost = 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
-  const ambientIntensity = 0.24 + brightnessBoost * 0.22;
-  const hemisphereIntensity = 0.54 + brightnessBoost * 0.26;
-  const keyLightIntensity = 3.1 + brightnessBoost * 1.1;
-  const rimLightIntensity = 0.08 + brightnessBoost * 0.08;
+  const ambientIntensity = (0.24 + brightnessBoost * 0.22) * mobileExploreLightScale;
+  const hemisphereIntensity = (0.54 + brightnessBoost * 0.26) * mobileExploreLightScale;
+  const keyLightIntensity = (3.1 + brightnessBoost * 1.1) * mobileExploreLightScale;
+  const rimLightIntensity = (0.08 + brightnessBoost * 0.08) * mobileExploreLightScale;
   const bloomIntensity = 0.06 + brightnessBoost * 0.08;
   const vignetteDarkness = 0.46 - brightnessBoost * 0.16;
 
@@ -804,8 +806,11 @@ export default function GlobeHero({
     if (quality === "mid") return [1, 1.25];
     return [1, 1.5];
   }, [isExplore, quality]);
-  const brightnessBoost = 1 - GLOBE_DIM;
-  const toneMappingExposure = 1.1 + brightnessBoost * 0.6;
+  const globeDimAmount = isPhoneViewport ? 0.18 : GLOBE_DIM;
+  const brightnessBoost = 1 - globeDimAmount;
+  const toneMappingExposure = isPhoneViewport
+    ? 0.98 + brightnessBoost * 0.38
+    : 1.1 + brightnessBoost * 0.6;
   const globeOverlayOpacity = !isPhoneViewport && cardVisible ? GLOBE_DIM * 0.04 : 0;
   const handleExploreStart = useCallback(() => {
     if (isPhoneViewport || isExplore) return;
@@ -866,7 +871,7 @@ export default function GlobeHero({
             <Suspense fallback={null}>
               <Scene
                 quality={quality}
-                dimAmount={GLOBE_DIM}
+                dimAmount={globeDimAmount}
                 paused={paused}
                 autoRotate={autoRotate && !reducedMotion}
                 activeIndex={activeIndex}

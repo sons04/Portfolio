@@ -86,6 +86,7 @@ function DeferredSection({ anchorId, minHeight, children }: DeferredSectionProps
 export function App() {
   const [navHidden, setNavHidden] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isPhoneViewport, setIsPhoneViewport] = useState(() => window.innerWidth <= 640);
   const lastScrollYRef = useRef(0);
 
   const closeMobileNav = () => setMobileNavOpen(false);
@@ -127,6 +128,7 @@ export function App() {
 
   useEffect(() => {
     const handleResize = () => {
+      setIsPhoneViewport(window.innerWidth <= 640);
       if (window.innerWidth > 980) {
         setMobileNavOpen(false);
       }
@@ -221,8 +223,9 @@ export function App() {
           <GlassCard variant="hero" className="heroCard">
             <div className="copy">
               <h1 className="title">
-                Cloud architect, technical leader, and hands-on builder across
-                software, security, and hardware.
+                {isPhoneViewport
+                  ? "Cloud architect, technical leader, and hands-on builder."
+                  : "Cloud architect, technical leader, and hands-on builder across software, security, and hardware."}
               </h1>
               <p className="subtitle">
                 Portfolio covering cloud infrastructure, frontend delivery,
