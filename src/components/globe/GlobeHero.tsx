@@ -520,6 +520,7 @@ function Scene({
   const enablePost = quality !== "low";
   const enableSSAO = quality === "high" && !isMobileExplore;
   const enableSMAA = quality === "high" && !isMobileExplore;
+  const enableBloom = !isMobileExplore;
   const bloomMipMapBlur = quality === "high" && !isMobileExplore;
   const mobileExploreLightScale = isPhoneViewport && isExplore ? 0.84 : 1;
   const brightnessBoost = 1 - THREE.MathUtils.clamp(dimAmount, 0, 1);
@@ -622,12 +623,16 @@ function Scene({
           ) : (
             <></>
           )}
-          <Bloom
-            intensity={bloomIntensity}
-            luminanceThreshold={0.7}
-            luminanceSmoothing={0.2}
-            mipmapBlur={bloomMipMapBlur}
-          />
+          {enableBloom ? (
+            <Bloom
+              intensity={bloomIntensity}
+              luminanceThreshold={0.7}
+              luminanceSmoothing={0.2}
+              mipmapBlur={bloomMipMapBlur}
+            />
+          ) : (
+            <></>
+          )}
           <Vignette offset={0.2} darkness={vignetteDarkness} />
           {enableSMAA ? <SMAA /> : <></>}
         </EffectComposer>
